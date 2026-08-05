@@ -195,4 +195,18 @@ class TSRDownload:
             timeout=REQUEST_TIMEOUT,
         )
         response.raise_for_status()
-        return response.json()["ticket"]
+        try:
+            data = response.json()
+        except Exception:
+            raise ValueError(
+                f"TSR initDownload returned non-JSON response (status {response.status_code}): "
+                f"{response.text[:200]!r}"
+            )
+        if "ticket" not in data:
+            logger.debug(f"TSR initDownload response: {data}")
+            error_msg = data.get("error") or data.get("message") or str(data)
+            raise ValueError(
+                f"TSR initDownload did not return a ticket for item {self.url.itemId}. "
+                f"Server said: {error_msg!r}"
+            )
+        return data["ticket"]
