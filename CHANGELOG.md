@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v1.0.2] — 2026-08-05
+
+### Added
+- **Live download progress bar** — each file now shows an in-place progress line while downloading: filename, a visual bar, percentage, and bytes transferred vs total (e.g. `[████████░░░░░░░░░░░░░░░░░] 42.3%  (5.2 MB / 12.4 MB)`).
+- **"Already up to date" message** in `start.bat` — when no update is available, the launcher now confirms the current version is the latest so users know the check ran.
+- **Graceful Ctrl+C shutdown** — pressing Ctrl+C now waits for any active downloads to finish before exiting, instead of killing them mid-file.
+- **Persistent installed version** via `.version` file — fixes a bug where the update checker would re-prompt for the same update every launch even after successfully updating.
+
+### Changed
+- **Clipboard poll interval** reduced from 0.1s to 0.5s — no noticeable UX difference, 5× less CPU usage.
+- **`TICKET_VALIDITY_MS`** replaces the magic number `15000` in `TSRDownload.py` for clarity.
+
+### Fixed
+- **Redundant network request** for filename — `__getFileName` previously made an unauthenticated `GET` request just to read the `Content-Disposition` header. This is now a single authenticated probe using `self.session`, eliminating a duplicate round-trip.
+- **Unauthenticated filename request** — the old bare `requests.get()` call for filename detection didn't send auth cookies; now uses `self.session` correctly.
+
+---
+
 ## [0.5.2-production] — 2026-08-04
 
 ### Added

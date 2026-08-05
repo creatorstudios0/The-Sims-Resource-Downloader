@@ -51,7 +51,7 @@ rem  STEP 3: Check for updates from GitHub
 rem ======================================================================
 rem Read the installed version from .version (written on each successful update).
 rem Fall back to the hardcoded baseline only when the file doesn't exist yet.
-set "CURRENT_VERSION=v1.0.1"
+set "CURRENT_VERSION=v1.0.2"
 if exist ".version" (
     set /p CURRENT_VERSION=<.version
     set "CURRENT_VERSION=!CURRENT_VERSION: =!"
@@ -129,6 +129,9 @@ if defined LATEST_TAG (
             echo !LATEST_TAG!> ".version"
             set "CURRENT_VERSION=!LATEST_TAG!"
         )
+        echo.
+    ) else (
+        echo  You are on the latest version: !CURRENT_VERSION!
         echo.
     )
 )

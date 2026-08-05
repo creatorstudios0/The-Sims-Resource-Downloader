@@ -111,95 +111,101 @@ if __name__ == "__main__":
     )
 
     executor = ThreadPoolExecutor(max_workers=CONFIG["maxActiveDownloads"])
-    while True:
-        try:
-            pastedText = clipboard.paste()
-        except Exception:
-            pastedText = lastPastedText
+    try:
+        while True:
+            try:
+                pastedText = clipboard.paste()
+            except Exception:
+                pastedText = lastPastedText
 
-        if lastPastedText == pastedText:
-            for item_id in downloadQueue[:]:
-                if len(runningDownloads) == CONFIG["maxActiveDownloads"]:
-                    break
-
-                url = TSRUrl(DETAILS_URL + str(item_id))
-                runningDownloads.append(url.itemId)
-                downloadQueue.remove(url.itemId)
-                logger.info(f"Moved {url.url} from queue to downloading")
-                future = executor.submit(
-                    processTarget,
-                    url,
-                    session.tsrdlsession,
-                    CONFIG["downloadDirectory"],
-                )
-                future.add_done_callback(callback)
-
-                if len(downloadQueue) == 0:
-                    logger.info("Queue is now empty")
-        else:
-            lastPastedText = pastedText
-            for line in pastedText.split("\n"):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    url = TSRUrl(line)
-                except InvalidURL:
-                    continue
-
-                if url.itemId in runningDownloads:
-                    logger.info(f"Url is already being downloaded: {url.url}")
-                    continue
-                if url.itemId in downloadQueue:
-                    logger.info(
-                        f"Url is already in queue (#{downloadQueue.index(url.itemId)}): {url.url}"
-                    )
-                    continue
-
-                if url.itemId in vipItemIds:
-                    logger.info(f"Url is currently a VIP exclusive: {url.url}")
-                    continue
-                elif url.isVipExclusive():
-                    logger.info(
-                        "Url is currently a VIP exclusive, "
-                        + (
-                            "storing url for later: "
-                            if CONFIG["saveDownloadQueue"]
-                            else "unable to download: "
-                        )
-                        + f"{url.url}"
-                    )
-                    vipItemIds.append(url.itemId)
-                    updateUrlFile()
-                    continue
-
-                requirements = TSRUrl.getRequiredItems(url)
-                logger.info(f"Found valid url in clipboard: {url.url}")
-                if len(requirements) != 0:
-                    logger.info(f"{url.url} has {len(requirements)} requirements")
-                for req_url in [url, *requirements]:
-                    if req_url.itemId in runningDownloads:
-                        logger.info(f"Url is already being downloaded: {req_url.itemId}")
-                        continue
-                    if req_url.itemId in downloadQueue:
-                        logger.info(
-                            f"Url is already in queue (#{downloadQueue.index(req_url.itemId)}): {req_url.url}"
-                        )
-                        continue
+            if lastPastedText == pastedText:
+                for item_id in downloadQueue[:]:
                     if len(runningDownloads) == CONFIG["maxActiveDownloads"]:
-                        logger.info(
-                            f"Added url to queue (#{len(downloadQueue)}): {req_url.url}"
-                        )
-                        downloadQueue.append(req_url.itemId)
-                    else:
-                        runningDownloads.append(req_url.itemId)
-                        future = executor.submit(
-                            processTarget,
-                            req_url,
-                            session.tsrdlsession,
-                            CONFIG["downloadDirectory"],
-                        )
-                        future.add_done_callback(callback)
-                updateUrlFile()
+                        break
 
-        time.sleep(0.1)
+                    url = TSRUrl(DETAILS_URL + str(item_id))
+                    runningDownloads.append(url.itemId)
+                    downloadQueue.remove(url.itemId)
+                    logger.info(f"Moved {url.url} from queue to downloading")
+                    future = executor.submit(
+                        processTarget,
+                        url,
+                        session.tsrdlsession,
+                        CONFIG["downloadDirectory"],
+                    )
+                    future.add_done_callback(callback)
+
+                    if len(downloadQueue) == 0:
+                        logger.info("Queue is now empty")
+            else:
+                lastPastedText = pastedText
+                for line in pastedText.split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        url = TSRUrl(line)
+                    except InvalidURL:
+                        continue
+
+                    if url.itemId in runningDownloads:
+                        logger.info(f"Url is already being downloaded: {url.url}")
+                        continue
+                    if url.itemId in downloadQueue:
+                        logger.info(
+                            f"Url is already in queue (#{downloadQueue.index(url.itemId)}): {url.url}"
+                        )
+                        continue
+
+                    if url.itemId in vipItemIds:
+                        logger.info(f"Url is currently a VIP exclusive: {url.url}")
+                        continue
+                    elif url.isVipExclusive():
+                        logger.info(
+                            "Url is currently a VIP exclusive, "
+                            + (
+                                "storing url for later: "
+                                if CONFIG["saveDownloadQueue"]
+                                else "unable to download: "
+                            )
+                            + f"{url.url}"
+                        )
+                        vipItemIds.append(url.itemId)
+                        updateUrlFile()
+                        continue
+
+                    requirements = TSRUrl.getRequiredItems(url)
+                    logger.info(f"Found valid url in clipboard: {url.url}")
+                    if len(requirements) != 0:
+                        logger.info(f"{url.url} has {len(requirements)} requirements")
+                    for req_url in [url, *requirements]:
+                        if req_url.itemId in runningDownloads:
+                            logger.info(f"Url is already being downloaded: {req_url.itemId}")
+                            continue
+                        if req_url.itemId in downloadQueue:
+                            logger.info(
+                                f"Url is already in queue (#{downloadQueue.index(req_url.itemId)}): {req_url.url}"
+                            )
+                            continue
+                        if len(runningDownloads) == CONFIG["maxActiveDownloads"]:
+                            logger.info(
+                                f"Added url to queue (#{len(downloadQueue)}): {req_url.url}"
+                            )
+                            downloadQueue.append(req_url.itemId)
+                        else:
+                            runningDownloads.append(req_url.itemId)
+                            future = executor.submit(
+                                processTarget,
+                                req_url,
+                                session.tsrdlsession,
+                                CONFIG["downloadDirectory"],
+                            )
+                            future.add_done_callback(callback)
+                    updateUrlFile()
+
+            time.sleep(0.5)
+
+    except KeyboardInterrupt:
+        logger.info("Shutting down... waiting for active downloads to finish.")
+        executor.shutdown(wait=True)
+        logger.info("All downloads finished. Goodbye!")
