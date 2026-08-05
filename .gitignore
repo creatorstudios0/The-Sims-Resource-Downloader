@@ -175,3 +175,4 @@ src/urls.txt
 src/captcha.png
 session
 src/session
+.version

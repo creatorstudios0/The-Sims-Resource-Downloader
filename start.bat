@@ -49,7 +49,13 @@ if not exist "venv\Scripts\python.exe" (
 rem ======================================================================
 rem  STEP 3: Check for updates from GitHub
 rem ======================================================================
-set "CURRENT_VERSION=0.5.2-production"
+rem Read the installed version from .version (written on each successful update).
+rem Fall back to the hardcoded baseline only when the file doesn't exist yet.
+set "CURRENT_VERSION=v1.0.1"
+if exist ".version" (
+    set /p CURRENT_VERSION=<.version
+    set "CURRENT_VERSION=!CURRENT_VERSION: =!"
+)
 set "GITHUB_REPO=creatorstudios0/The-Sims-Resource-Downloader"
 set "GITHUB_API=https://api.github.com/repos/%GITHUB_REPO%/releases/latest"
 set "LATEST_TAG="
@@ -119,6 +125,8 @@ if defined LATEST_TAG (
             echo  The downloader will now launch with the new version.
             echo ======================================================================
             echo.
+            rem Persist the new version so the next run won't re-prompt for an update.
+            echo !LATEST_TAG!> ".version"
             set "CURRENT_VERSION=!LATEST_TAG!"
         )
         echo.
