@@ -1,0 +1,9 @@
+{
+    "downloadDirectory": "./Downloads",
+    "maxActiveDownloads": 4,
+    "saveDownloadQueue": true,
+    "organizeDownloads": true,
+    "colorConsole": true,
+    "watermark": "Infinity Build",
+    "debug": false
+}
