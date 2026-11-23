@@ -8,16 +8,20 @@ Download and organize The Sims 4 custom content on Windows. Choose the desktop l
 
 | Edition | Get it | What it does |
 | --- | --- | --- |
-| **Sims 4 Mod Library 2.0.0** | [Download Windows EXE](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/download/desktop-v2.0.0/Sims.4.Mod.Library.2.0.exe) · [Release notes](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/tag/desktop-v2.0.0) | Browse The Sims Resource and CurseForge, queue downloads, review installs, scan your library, and back up profiles. |
-| **The Sims Resource Downloader v1.0.3** | [Console release](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/tag/v1.0.3) | Watch the clipboard for The Sims Resource links and download and sort files automatically. |
+| **CreatorStudios Sims 4 Mod Library 2.1.0** | [Download Windows EXE](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/download/suite-v2.1.0/CreatorStudios.Sims.4.Mod.Library.2.1.0.exe) | Browse The Sims Resource and CurseForge, queue downloads, review installs, scan your library, and back up profiles. |
+| **CreatorStudios Sims 4 Console 1.1.0** | [Download Console ZIP](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/download/suite-v2.1.0/CreatorStudios-Sims4-Console-1.1.0.zip) | Watch the clipboard for The Sims Resource links and download and sort files automatically. |
+
+Release notes and SHA-256 checksums are available on the [Suite 2.1.0 release page](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/tag/suite-v2.1.0).
 
 ### Windows desktop app
 
-Download and run `Sims.4.Mod.Library.2.0.exe` on 64-bit Windows. The unsigned executable includes its Python and Qt runtime.
+Download and run `CreatorStudios.Sims.4.Mod.Library.2.1.0.exe` on 64-bit Windows. The unsigned executable includes its Python and Qt runtime.
 
 ### Console downloader
 
-Extract the source ZIP from the console release and run `start.bat`. It installs the required dependencies on first run. Then copy a The Sims Resource item link to start downloading. If you already have the console downloader, run `start.bat` and accept the v1.0.3 update. This patch fixes corrupted resumed downloads and preserves existing `src/config.json` settings.
+Extract the Console ZIP into a separate folder and open `Run Console.bat`. The launcher installs the required dependencies on first run. Copy a The Sims Resource item link to start downloading.
+
+If you’re upgrading, back up your existing `src/config.json`, `src/session`, `src/urls.txt`, and `Downloads/` before transferring them into the new installation.
 
 ## Console features
 
@@ -45,7 +49,7 @@ Downloads\Other Files\Archives
 
 ## Console configuration
 
-In a fresh v1.0.3 installation, copy `src/config.defaults.json` to `src/config.json` before editing your settings. If `src/config.json` already exists, edit that file.
+Edit `src/config.json` to change console settings.
 
 | Option | Description | Type |
 | - | - | - |
@@ -154,8 +158,3 @@ python scripts/package_console.py
 
 On Windows, prepare the venv, install PyInstaller and run
 `powershell -ExecutionPolicy Bypass -File .\\build-desktop.ps1`.
-
-**Upgrade warning:** Install a fresh console ZIP alongside your old installation,
-or manually transfer your original `src/config.json`, session, queue and Downloads
-folder after backing them up. The launcher no longer overwrites configuration by
-automatically applying source ZIP updates.
