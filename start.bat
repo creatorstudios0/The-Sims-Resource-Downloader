@@ -53,86 +53,19 @@ if /I "%~1"=="--settings" goto :ConsoleTools
 if /I "%~1"=="--console-tools" goto :ConsoleTools
 if /I "%~1"=="--help" goto :Usage
 if /I "%~1"=="--console" goto :CheckConsoleUpdates
-if /I "%~1"=="--classic" goto :ConsoleTools
-set "TOOL=%~1"
-if /I "%TOOL%"=="--doctor" set "TOOL=doctor"
-if /I "%TOOL%"=="--audit" set "TOOL=audit"
-if /I "%TOOL%"=="--queue" set "TOOL=queue"
-if /I "%TOOL%"=="--settings" set "TOOL=settings"
-if /I "%TOOL%"=="--console-tools" set "TOOL=doctor"
-shift
-venv\Scripts\python.exe src\console_tools.py %TOOL% %2 %3 %4 %5 %6 %7 %8 %9
-exit /b %errorlevel%
+rem Update source ZIPs are no longer applied over a live installation.
+rem Old in-place updates could overwrite config.json and personal settings.
+rem The unified GitHub release contains both current editions and checksums.
+echo CreatorStudios Sims 4 Console v1.1.0
+echo Download new versions at:
+echo https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases
+echo Existing configuration, queues, sessions, and Downloads are not changed.
+goto :LaunchApp
 
-:Usage
-echo CreatorStudios Sims 4 Suite
-echo   start.bat                 Open desktop application
-echo   start.bat --console       Run TSR clipboard downloader
-echo   start.bat --classic       Open legacy desktop application
-echo   start.bat --doctor        Diagnose local settings and folders
-echo   start.bat --audit         Inspect duplicate mods (read-only)
-echo   start.bat --queue         Show saved download queue
-echo   start.bat --settings      Show console preferences
-echo   start.bat --help          Show command reference
-exit /b 0
-
-:LaunchClassic
-venv\Scripts\python.exe -c "import PySide6.QtWidgets" >nul 2>&1
-if errorlevel 1 (
-    venv\Scripts\python.exe -m pip install -r requirements.txt
-    if errorlevel 1 exit /b 1
-)
-venv\Scripts\python.exe src\desktop_qt.py
-if errorlevel 1 pause
-exit /b %errorlevel%
-
-:LaunchClassic
-venv\Scripts\python.exe src\desktop.py
-if errorlevel 1 pause
-exit /b %errorlevel%
-
-:CheckConsoleUpdates
 rem ======================================================================
-rem  STEP 3: Check for updates from GitHub
+rem  Launch the downloader
 rem ======================================================================
-rem Read the installed version from .version (written on each successful update).
-rem Fall back to the hardcoded baseline only when the file doesn't exist yet.
-set "CURRENT_VERSION=v1.0.2"
-if exist ".version" (
-    set /p CURRENT_VERSION=<.version
-    set "CURRENT_VERSION=!CURRENT_VERSION: =!"
-)
-set "GITHUB_REPO=creatorstudios0/The-Sims-Resource-Downloader"
-set "GITHUB_API=https://api.github.com/repos/%GITHUB_REPO%/releases/latest"
-set "LATEST_TAG="
-
-curl -s --max-time 5 -o "%TEMP%\tsr_latest.json" "%GITHUB_API%" >nul 2>&1
-if exist "%TEMP%\tsr_latest.json" (
-    for /f "tokens=2 delims=:," %%a in ('findstr /i "tag_name" "%TEMP%\tsr_latest.json"') do (
-        set "LATEST_TAG=%%a"
-        set "LATEST_TAG=!LATEST_TAG: =!"
-        set "LATEST_TAG=!LATEST_TAG:"=!"
-    )
-    del "%TEMP%\tsr_latest.json" >nul 2>&1
-)
-
-if defined LATEST_TAG (
-    if "!LATEST_TAG!" neq "!CURRENT_VERSION!" (
-        echo.
-        echo ======================================================================
-        echo  UPDATE AVAILABLE!
-        echo  Current version : !CURRENT_VERSION!
-        echo  Latest version  : !LATEST_TAG!
-        echo ======================================================================
-        set /p "update_choice=Would you like to automatically update now? (Y/N): "
-        if /i "!update_choice!"=="Y" (
-            echo.
-            echo [1/5] Downloading update !LATEST_TAG!...
-            curl -# -L -o "%TEMP%\tsr_update.zip" "https://github.com/%GITHUB_REPO%/archive/refs/tags/!LATEST_TAG!.zip"
-            if !errorlevel! neq 0 (
-                echo [ERROR] Download failed. Check your internet connection and try again.
-                pause
-                goto :LaunchApp
+:LaunchApp
             )
 
             echo [2/5] Extracting update...
