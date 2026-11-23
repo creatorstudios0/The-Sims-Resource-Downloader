@@ -17,7 +17,7 @@ class DownloadResumeTests(TestCase):
         self.enterContext(
             patch.object(
                 self.downloader,
-                "_TSRDownload__getDownloadUrl",
+                "_getDownloadUrl",
                 return_value="https://example.invalid/mod",
             )
         )

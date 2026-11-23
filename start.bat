@@ -34,7 +34,7 @@ if not exist "venv\Scripts\python.exe" (
     )
 
     echo [Setup 2/2] Installing required dependencies...
-    venv\Scripts\pip.exe install -r requirements.txt --quiet
+    venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
     if !errorlevel! neq 0 (
         echo [ERROR] Failed to install dependencies. Check your internet connection.
         pause
@@ -46,6 +46,23 @@ if not exist "venv\Scripts\python.exe" (
     echo.
 )
 
+if /I "%~1"=="--console" goto :CheckConsoleUpdates
+if /I "%~1"=="--classic" goto :LaunchClassic
+venv\Scripts\python.exe -c "import PySide6.QtWidgets" >nul 2>&1
+if errorlevel 1 (
+    venv\Scripts\python.exe -m pip install -r requirements.txt
+    if errorlevel 1 exit /b 1
+)
+venv\Scripts\python.exe src\desktop_qt.py
+if errorlevel 1 pause
+exit /b %errorlevel%
+
+:LaunchClassic
+venv\Scripts\python.exe src\desktop.py
+if errorlevel 1 pause
+exit /b %errorlevel%
+
+:CheckConsoleUpdates
 rem ======================================================================
 rem  STEP 3: Check for updates from GitHub
 rem ======================================================================
@@ -106,7 +123,7 @@ if defined LATEST_TAG (
             rmdir /s /q "%TEMP%\tsr_update" >nul 2>&1
 
             echo [4/5] Installing any new dependencies...
-            venv\Scripts\pip.exe install -r requirements.txt --quiet
+            venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
 
             echo [5/5] Finalizing update...
             rem Apply new start.bat last via a detached helper so this file isn't locked

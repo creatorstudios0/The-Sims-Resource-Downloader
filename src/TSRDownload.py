@@ -68,10 +68,10 @@ class TSRDownload:
 
     def init(self):
         logger.info(f"Initializing TSRDownload for: {self.url.url}")
-        self.TSRDLTicket = self.__getTSRDLTicket()
+        self.TSRDLTicket = self._getTSRDLTicket()
         self.session.cookies.set(
             "tsrdlsession",
-            self.sessionId or self.__getTSRDLTicketCookie()
+            self.sessionId or self._getTSRDLTicketCookie()
         )
         self.ticketInitializedTime = time.time() * 1000
 
@@ -100,7 +100,7 @@ class TSRDownload:
                     raise
 
     def _attemptDownload(self, downloadPath: str) -> str:
-        downloadUrl = self.__getDownloadUrl()
+        downloadUrl = self._getDownloadUrl()
         logger.debug(f"Got downloadUrl: {downloadUrl}")
 
         # Probe request: read Content-Disposition for filename without consuming the body.
@@ -178,7 +178,7 @@ class TSRDownload:
             os.rename(partPath, finalPath)
         return organizeDownloadedFile(finalPath)
 
-    def __getDownloadUrl(self) -> str:
+    def _getDownloadUrl(self) -> str:
         response = self.session.get(
             f"https://www.thesimsresource.com/ajax.php?c=downloads&a=getdownloadurl&ajax=1"
             f"&itemid={self.url.itemId}&mid=0&lk=0&ticket={self.TSRDLTicket}",
@@ -195,14 +195,14 @@ class TSRDownload:
         else:
             raise ValueError(f"Unexpected TSR error: {responseJSON['error']}")
 
-    def __getTSRDLTicketCookie(self) -> str:
+    def _getTSRDLTicketCookie(self) -> str:
         logger.info(f"Getting 'tsrdlticket' cookie for: {self.url.url}")
         url = f"{self.url.downloadUrl}/ticket/{self.TSRDLTicket}"
         response = self.session.get(url, timeout=REQUEST_TIMEOUT)
         set_cookie = response.headers.get("Set-Cookie")
         return set_cookie.split(";")[0].split("=")[1] if set_cookie else ""
 
-    def __getTSRDLTicket(self) -> str:
+    def _getTSRDLTicket(self) -> str:
         logger.info(f"Getting 'tsrdlticket' for: {self.url.url}")
         response = self.session.get(
             f"https://www.thesimsresource.com/ajax.php?c=downloads&a=initDownload"
