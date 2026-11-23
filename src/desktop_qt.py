@@ -11,7 +11,7 @@ from PySide6.QtCore import QBuffer, QIODevice, QByteArray, QPropertyAnimation, Q
 from PySide6.QtGui import QIcon, QImageReader, QPixmap, QColor, QDesktopServices, QKeySequence, QShortcut, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog,
-    QFrame, QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QInputDialog, QLineEdit,
+    QFrame, QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QInputDialog, QLineEdit, QListWidget,
     QListView, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QSpinBox, QSplitter,
     QStackedWidget, QVBoxLayout, QWidget,
 )
@@ -26,6 +26,7 @@ from qt_services import (
 from qt_theme import ProgressPainter, button, icon, label, row, scroll_area, selected, surface, table, theme, update_rows
 from sims_install import installed_path, MOD_EXTENSIONS
 from desktop_data import fetch_thumbnail
+from palette_search import match_commands
 from windows_folders import detect_game
 from website_links import WebsiteLinkServer, forward_link, parse_install_link, set_registration
 
@@ -79,9 +80,9 @@ class MainWindow(QMainWindow):
     def __init__(self, service):
         super().__init__()
         self.s = service
-        self.setWindowTitle("Sims 4 Mod Library")
-        self.setWindowIcon(icon("brand", "#46DFAE"))
-        self.resize(1200, 800)
+        self.setWindowTitle("CreatorStudios • Sims 4 Mod Library")
+        self.setWindowIcon(icon("brand", "#A996FF"))
+        self.resize(1320, 850)
         self.setMinimumSize(785, 605)
         self.collapsed = self.manual_collapse = self.closing = False
         self.profile = None
@@ -104,6 +105,7 @@ class MainWindow(QMainWindow):
         QApplication.clipboard().dataChanged.connect(self.clipboard_changed)
         QShortcut(QKeySequence("Ctrl+L"), self, activated=self.focus_import)
         QShortcut(QKeySequence("Ctrl+F"), self, activated=self.focus_search)
+        QShortcut(QKeySequence("Ctrl+K"), self, activated=self.command_palette)
         self.go(0)
         self.refresh()
         self.s.auto_scan()
@@ -127,13 +129,14 @@ class MainWindow(QMainWindow):
         side = QVBoxLayout(self.sidebar)
         side.setContentsMargins(14, 16, 14, 16)
         side.setSpacing(8)
-        self.brand = button("Mod Library", self.toggle_sidebar, glyph="brand")
+        self.brand = button("CREATORSTUDIOS", self.toggle_sidebar, glyph="brand")
+        self.brand.setObjectName("brandButton")
         self.brand.setToolTip("Collapse or expand navigation")
         self.brand.setAccessibleName("Toggle sidebar")
         self.brand.setProperty("nav", True)
         side.addWidget(self.brand)
         side.addSpacing(12)
-        self.workspace_label = label("WORKSPACE", "eyebrow")
+        self.workspace_label = label("SIMS 4 WORKSPACE", "eyebrow")
         self.preferences_label = label("PREFERENCES", "eyebrow")
         side.addWidget(self.workspace_label)
         self.nav = QButtonGroup(self)
@@ -153,7 +156,7 @@ class MainWindow(QMainWindow):
         side.addStretch()
         self.health_label = label("Library health · awaiting scan", "secondary", True)
         self.release_status = label("", "secondary", True)
-        self.version_label = label(f"Version {VERSION}", "eyebrow")
+        self.version_label = label(f"CREATORSTUDIOS  ·  v{VERSION}", "eyebrow")
         for widget in (self.health_label, self.release_status, self.version_label):
             side.addWidget(widget)
         shell.addWidget(self.sidebar)
@@ -169,8 +172,11 @@ class MainWindow(QMainWindow):
         header.addWidget(self.title)
         header.addWidget(self.description)
         self.releases = button("Check releases", self.check_releases, glyph="refresh")
+        self.quick_switch = button("Quick switch  Ctrl+K", self.command_palette, glyph="search")
+        self.quick_switch.setAccessibleName("Open quick switch command palette")
         line = QHBoxLayout()
         line.addLayout(header, 1)
+        line.addWidget(self.quick_switch, alignment=Qt.AlignmentFlag.AlignTop)
         line.addWidget(self.releases, alignment=Qt.AlignmentFlag.AlignTop)
         content.addLayout(line)
         self.pages = QStackedWidget()
@@ -203,6 +209,65 @@ class MainWindow(QMainWindow):
         self.title.setText(NAV[index][0])
         self.description.setText(NAV[index][2])
 
+    def command_palette(self):
+        """Keyboard-first navigation without changing the existing workflows."""
+        actions = [
+            {"title": name, "description": description, "keywords": glyph,
+             "run": lambda index=index: self.go(index)}
+            for index, (name, glyph, description) in enumerate(NAV)
+        ]
+        actions.extend([
+            {"title": "Import local content", "description": "Choose Sims 4 files to install",
+             "keywords": "mods package zip", "run": self.add_files},
+            {"title": "Scan library", "description": "Inspect folders and refresh library health",
+             "keywords": "health duplicates", "run": self.s.scan},
+            {"title": "Open Mods folder", "description": "View installed Sims 4 mods",
+             "keywords": "files explorer", "run": lambda: self.open_setting_folder("Mods")},
+            {"title": "Check for releases", "description": "Check for application updates",
+             "keywords": "update version", "run": self.check_releases},
+            {"title": "Search my mods", "description": "Filter installed content",
+             "keywords": "library find", "run": self.focus_search},
+        ])
+        dialog = QDialog(self)
+        dialog.setWindowTitle("CreatorStudios · Quick switch")
+        dialog.setMinimumWidth(500)
+        panel = QVBoxLayout(dialog)
+        panel.setContentsMargins(16, 16, 16, 16)
+        panel.addWidget(label("QUICK SWITCH", "eyebrow"))
+        search = QLineEdit()
+        search.setPlaceholderText("Find a page or action…")
+        search.setAccessibleName("Search commands")
+        panel.addWidget(search)
+        results = QListWidget()
+        results.setAccessibleName("Matching commands")
+        panel.addWidget(results)
+        hint = label("Enter to select  ·  Escape to close  ·  Ctrl+K to open", "secondary")
+        panel.addWidget(hint)
+        visible = []
+
+        def update(text):
+            visible[:] = match_commands(actions, text)
+            results.clear()
+            for action in visible:
+                results.addItem(f"{action['title']}   ·   {action['description']}")
+            if visible:
+                results.setCurrentRow(0)
+            hint.setText(f"{len(visible)} actions found  ·  Enter to open" if visible else "No matching actions")
+
+        def execute():
+            index = results.currentRow()
+            if 0 <= index < len(visible):
+                callback = visible[index]["run"]
+                dialog.accept()
+                callback()
+
+        search.textChanged.connect(update)
+        search.returnPressed.connect(execute)
+        results.itemActivated.connect(lambda _: execute())
+        update("")
+        search.setFocus()
+        dialog.exec()
+
     def focus_import(self):
         self.go(1)
         self.links.setFocus()
@@ -226,7 +291,7 @@ class MainWindow(QMainWindow):
             return
         self.collapsed = collapsed
         self.sidebar.setFixedWidth(76 if collapsed else 224)
-        self.brand.setText("" if collapsed else "Mod Library")
+        self.brand.setText("" if collapsed else "CREATORSTUDIOS")
         for index, control in enumerate(self.nav_buttons):
             control.setText("" if collapsed else NAV[index][0])
         for control in (self.workspace_label, self.preferences_label, self.health_label, self.release_status, self.version_label):
@@ -288,6 +353,14 @@ class MainWindow(QMainWindow):
             cards.setColumnStretch(index, 1)
             self.stats.append(value)
         layout.addLayout(cards)
+        spotlight, hero = surface("hero")
+        hero.addWidget(label("YOUR CREATIVE SPACE", "eyebrow"))
+        hero.addWidget(label("Everything your Sims world needs, in one place.", "heroTitle", True))
+        hero.addWidget(label("Find new content, manage your collection, and keep your game organized — powered by CreatorStudios.", "secondary", True))
+        hero.addLayout(row(button("Explore content", lambda: self.go(4), True, "search"),
+                           button("View my library", lambda: self.go(2), glyph="library"),
+                           button("Run health scan", self.s.scan, glyph="refresh"), None))
+        layout.addWidget(spotlight)
         quick, controls = surface()
         controls.addWidget(label("Quick actions", "section"))
         controls.addLayout(row(button("Discover content", lambda: self.go(4), True, "search"),
@@ -1332,8 +1405,8 @@ class MainWindow(QMainWindow):
             self.inform("The log folder could not be opened.", "warning")
 
     def about(self):
-        QMessageBox.about(self, "About Sims 4 Mod Library",
-                          f"Sims 4 Mod Library {VERSION}\nPySide6 desktop workspace for The Sims Resource and local Sims 4 content.")
+        QMessageBox.about(self, "About CreatorStudios Sims 4 Mod Library",
+                          f"CreatorStudios Sims 4 Mod Library {VERSION}\nPySide6 desktop workspace for The Sims Resource and local Sims 4 content.\nOriginal downloader attribution is retained in NOTICE.md.")
 
     def check_releases(self):
         self.release_status.setText("Checking releases…")
