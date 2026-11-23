@@ -22,6 +22,13 @@ class ConsoleToolsTests(unittest.TestCase):
         with TemporaryDirectory() as temp:
             self.assertEqual(queue_info(Path(temp) / "missing.txt")["count"], 0)
 
+    def test_malformed_url_does_not_hide_later_queue_entries(self):
+        with TemporaryDirectory() as temp:
+            saved = Path(temp) / "urls.txt"
+            valid = "https://www.thesimsresource.com/downloads/details/id/42"
+            saved.write_text(f"https://[\n{valid}\n", encoding="utf-8")
+            self.assertEqual(queue_info(saved)["urls"], [valid])
+
     def test_doctor_validates_worker_range(self):
         with TemporaryDirectory() as temp:
             rows = diagnostics({"maxActiveDownloads": 0}, Path(temp))

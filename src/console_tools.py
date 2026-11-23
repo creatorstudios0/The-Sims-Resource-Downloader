@@ -48,7 +48,10 @@ def queue_info(queue_file):
     urls = []
     for item in queue_file.read_text(encoding="utf-8-sig").splitlines():
         candidate = item.strip()
-        parsed = urlparse(candidate)
+        try:
+            parsed = urlparse(candidate)
+        except ValueError:
+            continue
         if (parsed.scheme == "https" and parsed.hostname in
                 {"www.thesimsresource.com", "thesimsresource.com"} and
                 parsed.username is None and parsed.password is None and
