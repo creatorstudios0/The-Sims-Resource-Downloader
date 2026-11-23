@@ -2,7 +2,7 @@ from __future__ import annotations
 from exceptions import InvalidURL
 from logger import logger
 import re, requests
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 
 
 class TSRUrl:
@@ -19,6 +19,7 @@ class TSRUrl:
             re.search(r"(?<=/id/)[\d]+", url)
             or re.search(r"(?<=/itemId/)[\d]+", url)
             or re.search(r"(?<=.com/downloads/)[\d]+", url)
+            or re.search(r"(?<=/downloads/)[\d]+", url)
         )
         logger.debug(
             f"Got ItemId: {itemId[0] if itemId is not None else 'None'} from Url: {url}"
@@ -26,15 +27,19 @@ class TSRUrl:
         return None if itemId is None else int(itemId[0])
 
     def __isValidUrl(self, url: str) -> bool:
-        # A substring check accepts lookalike hosts such as
-        # ``evilthesimsresource.com``.  Clipboard URLs are fetched later when
-        # checking VIP status, so only let the official TSR host through.
-        host = urlparse(url).hostname
-        isOfficialHost = host is not None and host.rstrip(".").lower() in {
-            "thesimsresource.com",
-            "www.thesimsresource.com",
-        }
-        isUrlValid = isOfficialHost and self.__getItemId(url) is not None
+        """Avoid clipboard-originated requests to fake or untrusted hosts."""
+        try:
+            parsed = urlsplit(url)
+            allowed = (
+                parsed.scheme == "https"
+                and parsed.hostname in {"thesimsresource.com", "www.thesimsresource.com"}
+                and parsed.username is None and parsed.password is None
+                and (parsed.port is None or parsed.port == 443)
+            )
+        except ValueError:
+            allowed = False
+        valid_id = self.__getItemId(parsed.path) if allowed else None
+        isUrlValid = allowed and valid_id is not None and parsed.path.startswith("/downloads/")
         logger.debug(f"Is url valid: {isUrlValid}")
         return isUrlValid
 

@@ -66,6 +66,17 @@ class TSRDownload:
         self.ticketInitializedTime = -1.0
         self.session: requests.Session = requests.Session()
 
+    # Public-to-subclass hooks keep the desktop downloader compatible while the
+    # console retains its original private ticket methods and resume safeguards.
+    def _getDownloadUrl(self):
+        return self.__getDownloadUrl()
+
+    def _getTSRDLTicketCookie(self):
+        return self.__getTSRDLTicketCookie()
+
+    def _getTSRDLTicket(self):
+        return self.__getTSRDLTicket()
+
     def init(self):
         logger.info(f"Initializing TSRDownload for: {self.url.url}")
         self.TSRDLTicket = self.__getTSRDLTicket()

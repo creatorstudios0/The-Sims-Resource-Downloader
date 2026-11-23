@@ -1,0 +1,111 @@
+name: CreatorStudios Sims 4 Suite Release
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+# Only one release job may publish this version at a time.
+concurrency:
+  group: creatorstudios-suite-2-1-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src:scripts
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python dependencies and test tools
+        run: python -m pip install -r requirements.txt pytest pytest-qt
+      - name: Compile both editions
+        run: python -m compileall -q src scripts tests
+      - name: Run regression suite
+        run: python -m pytest -q tests/test_library_insights.py tests/test_console_tools.py tests/test_package_console.py tests/test_palette_search.py tests/test_tsr_host_security.py
+
+  windows-release:
+    needs: verify
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare desktop environment
+        shell: pwsh
+        run: |
+          python -m venv venv
+          .\venv\Scripts\python.exe -m pip install -r requirements.txt pyinstaller pytest pytest-qt
+      - name: Compile source and execute Windows tests
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PYTHONPATH: src;scripts
+        run: |
+          .\venv\Scripts\python.exe -m compileall -q src scripts tests
+          .\venv\Scripts\python.exe -m pytest -q
+      - name: Smoke-test Windows launchers and console audit
+        shell: pwsh
+        run: |
+          & .\start.bat --help
+          if ($LASTEXITCODE -ne 0) { throw "Launcher help failed." }
+          & .\start.bat --doctor
+          if ($LASTEXITCODE -ne 0) { throw "Console doctor failed." }
+          $audit = Join-Path $env:RUNNER_TEMP 'creatorstudios-smoke-audit.json'
+          & .\start.bat --audit --output $audit
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path -LiteralPath $audit)) { throw "Console audit/export failed." }
+
+      - name: Build desktop EXE
+        shell: pwsh
+        run: .\build-desktop.ps1
+      - name: Package console ZIP
+        shell: pwsh
+        run: .\venv\Scripts\python.exe scripts/package_console.py
+      - name: Verify both release editions exist
+        shell: pwsh
+        run: |
+          $executables = @(Get-ChildItem dist -File -Filter '*.exe')
+          $archives = @(Get-ChildItem dist -File -Filter '*.zip')
+          if ($executables.Count -ne 1) { throw "Expected one Windows EXE, found $($executables.Count)" }
+          if ($archives.Count -ne 1) { throw "Expected one console ZIP, found $($archives.Count)" }
+          if ($executables[0].Length -le 0 -or $archives[0].Length -le 0) { throw "Release artifacts are empty" }
+
+      - name: Generate SHA256 manifest
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -File | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+      - name: Upload combined release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CreatorStudios-Sims4-Suite-Windows
+          path: dist/*
+          if-no-files-found: error
+      - name: Publish CreatorStudios Sims 4 Suite 2.1.0
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = "suite-v2.1.0"
+          $existing = gh release view $tag --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag already exists; no duplicate publication."
+            exit 0
+          }
+          gh release create $tag --target "${{ github.sha }}" --title "CreatorStudios Sims 4 Suite v2.1.0" --notes-file RELEASE_NOTES_2.1.0.md --latest dist/*
+          if ($LASTEXITCODE -ne 0) { throw "GitHub release publication failed." }
