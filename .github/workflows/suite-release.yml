@@ -59,6 +59,15 @@ jobs:
       - name: Package console ZIP
         shell: pwsh
         run: .\venv\Scripts\python.exe scripts/package_console.py
+      - name: Verify both release editions exist
+        shell: pwsh
+        run: |
+          $executables = @(Get-ChildItem dist -File -Filter '*.exe')
+          $archives = @(Get-ChildItem dist -File -Filter '*.zip')
+          if ($executables.Count -ne 1) { throw "Expected one Windows EXE, found $($executables.Count)" }
+          if ($archives.Count -ne 1) { throw "Expected one console ZIP, found $($archives.Count)" }
+          if ($executables[0].Length -le 0 -or $archives[0].Length -le 0) { throw "Release artifacts are empty" }
+
       - name: Generate SHA256 manifest
         shell: pwsh
         run: |
