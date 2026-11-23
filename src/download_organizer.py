@@ -1,5 +1,6 @@
 from __future__ import annotations
-import os, shutil, zipfile
+import os, zipfile
+from pathlib import Path
 from config import CONFIG
 from logger import logger
 
@@ -69,8 +70,10 @@ MOD_KEYWORDS = {
 }
 
 
-def organizeDownloadedFile(filePath: str) -> str:
-    if not CONFIG.get("organizeDownloads", True):
+def organizeDownloadedFile(filePath: str, enabled: bool | None = None) -> str:
+    if enabled is None:
+        enabled = CONFIG.get("organizeDownloads", True)
+    if not enabled:
         return filePath
 
     category, subcategory = getDownloadCategory(filePath)
@@ -82,15 +85,29 @@ def organizeDownloadedFile(filePath: str) -> str:
     ):
         return filePath
 
-    os.makedirs(targetDirectory, exist_ok=True)
-    if os.path.exists(targetPath):
-        os.replace(filePath, targetPath)
-    else:
-        shutil.move(filePath, targetPath)
+    directory = Path(targetDirectory)
+    root = Path(filePath).parent.resolve()
+    if directory.resolve() != root / category / subcategory:
+        logger.warning("Skipped organization because the destination was redirected: %s", directory)
+        return filePath
 
+    directory.mkdir(parents=True, exist_ok=True)
+    published = move_with_unique_name(Path(filePath), Path(targetPath))
     logger.info(f"Organized download into: {category}/{subcategory}")
-    return targetPath
+    return str(published)
 
+
+def move_with_unique_name(source: Path, destination: Path) -> Path:
+    """Publish on the same volume using Windows rename without replacing an existing file."""
+    candidate = destination
+    number = 2
+    while True:
+        try:
+            source.rename(candidate)
+            return candidate
+        except FileExistsError:
+            candidate = destination.with_stem(f"{destination.stem} ({number})")
+            number += 1
 
 def getDownloadCategory(filePath: str) -> tuple[str, str]:
     fileNames = [os.path.basename(filePath), *_getArchiveFileNames(filePath)]

@@ -34,7 +34,7 @@ if not exist "venv\Scripts\python.exe" (
     )
 
     echo [Setup 2/2] Installing required dependencies...
-    venv\Scripts\pip.exe install -r requirements.txt --quiet
+    venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
     if !errorlevel! neq 0 (
         echo [ERROR] Failed to install dependencies. Check your internet connection.
         pause
@@ -46,112 +46,27 @@ if not exist "venv\Scripts\python.exe" (
     echo.
 )
 
-rem ======================================================================
-rem  STEP 3: Check for updates from GitHub
-rem ======================================================================
-rem Read the installed version from .version (written on each successful update).
-rem Fall back to the hardcoded baseline only when the file doesn't exist yet.
-set "CURRENT_VERSION=v1.0.2"
-if exist ".version" (
-    set /p CURRENT_VERSION=<.version
-    set "CURRENT_VERSION=!CURRENT_VERSION: =!"
+if /I "%~1"=="--console" goto :LaunchConsole
+if /I "%~1"=="--classic" goto :LaunchClassic
+venv\Scripts\python.exe -c "import PySide6.QtWidgets" >nul 2>&1
+if errorlevel 1 (
+    venv\Scripts\python.exe -m pip install -r requirements.txt
+    if errorlevel 1 exit /b 1
 )
-set "GITHUB_REPO=creatorstudios0/The-Sims-Resource-Downloader"
-set "GITHUB_API=https://api.github.com/repos/%GITHUB_REPO%/releases/latest"
-set "LATEST_TAG="
+venv\Scripts\python.exe src\desktop_qt.py
+if errorlevel 1 pause
+exit /b %errorlevel%
 
-curl -s --max-time 5 -o "%TEMP%\tsr_latest.json" "%GITHUB_API%" >nul 2>&1
-if exist "%TEMP%\tsr_latest.json" (
-    for /f "tokens=2 delims=:," %%a in ('findstr /i "tag_name" "%TEMP%\tsr_latest.json"') do (
-        set "LATEST_TAG=%%a"
-        set "LATEST_TAG=!LATEST_TAG: =!"
-        set "LATEST_TAG=!LATEST_TAG:"=!"
-    )
-    del "%TEMP%\tsr_latest.json" >nul 2>&1
-)
+:LaunchClassic
+venv\Scripts\python.exe src\desktop.py
+if errorlevel 1 pause
+exit /b %errorlevel%
 
-if defined LATEST_TAG (
-    if "!LATEST_TAG!" neq "!CURRENT_VERSION!" (
-        echo.
-        echo ======================================================================
-        echo  UPDATE AVAILABLE!
-        echo  Current version : !CURRENT_VERSION!
-        echo  Latest version  : !LATEST_TAG!
-        echo ======================================================================
-        set /p "update_choice=Would you like to automatically update now? (Y/N): "
-        if /i "!update_choice!"=="Y" (
-            echo.
-            echo [1/5] Downloading update !LATEST_TAG!...
-            curl -# -L -o "%TEMP%\tsr_update.zip" "https://github.com/%GITHUB_REPO%/archive/refs/tags/!LATEST_TAG!.zip"
-            if !errorlevel! neq 0 (
-                echo [ERROR] Download failed. Check your internet connection and try again.
-                pause
-                goto :LaunchApp
-            )
-
-            echo [2/5] Extracting update...
-            if exist "%TEMP%\tsr_update" rmdir /s /q "%TEMP%\tsr_update"
-            powershell -NoProfile -Command "Expand-Archive -Path '%TEMP%\tsr_update.zip' -DestinationPath '%TEMP%\tsr_update' -Force" >nul 2>&1
-            del "%TEMP%\tsr_update.zip" >nul 2>&1
-
-            echo [3/5] Applying update files...
-            for /d %%d in ("%TEMP%\tsr_update\*") do (
-                xcopy "%%d\src" "%~dp0src" /E /Y /Q >nul 2>&1
-                if exist "%%d\requirements.txt" copy /Y "%%d\requirements.txt" "%~dp0requirements.txt" >nul 2>&1
-                if exist "%%d\README.md"        copy /Y "%%d\README.md"        "%~dp0README.md"        >nul 2>&1
-                if exist "%%d\CHANGELOG.md"     copy /Y "%%d\CHANGELOG.md"     "%~dp0CHANGELOG.md"     >nul 2>&1
-                if exist "%%d\NOTICE.md"        copy /Y "%%d\NOTICE.md"        "%~dp0NOTICE.md"        >nul 2>&1
-                if exist "%%d\start.bat"        copy /Y "%%d\start.bat"        "%TEMP%\start_new.bat"  >nul 2>&1
-            )
-            rmdir /s /q "%TEMP%\tsr_update" >nul 2>&1
-
-            echo [4/5] Installing any new dependencies...
-            venv\Scripts\pip.exe install -r requirements.txt --quiet
-
-            echo [5/5] Finalizing update...
-            rem Apply new start.bat last via a detached helper so this file isn't locked
-            if exist "%TEMP%\start_new.bat" (
-                echo @echo off > "%TEMP%\tsr_apply.bat"
-                echo timeout /t 1 /nobreak ^>nul >> "%TEMP%\tsr_apply.bat"
-                echo copy /Y "%TEMP%\start_new.bat" "%~dp0start.bat" ^>nul 2^>^&1 >> "%TEMP%\tsr_apply.bat"
-                echo del "%TEMP%\start_new.bat" >> "%TEMP%\tsr_apply.bat"
-                echo del "%TEMP%\tsr_apply.bat" >> "%TEMP%\tsr_apply.bat"
-                start /b "" cmd /c "%TEMP%\tsr_apply.bat"
-            )
-
-            echo.
-            echo ======================================================================
-            echo  [SUCCESS] Updated to !LATEST_TAG! successfully!
-            echo  The downloader will now launch with the new version.
-            echo ======================================================================
-            echo.
-            rem Persist the new version so the next run won't re-prompt for an update.
-            echo !LATEST_TAG!> ".version"
-            set "CURRENT_VERSION=!LATEST_TAG!"
-        )
-        echo.
-    ) else (
-        echo  You are on the latest version: !CURRENT_VERSION!
-        echo.
-    )
-)
-
-rem ======================================================================
-rem  STEP 4: Launch the downloader
-rem ======================================================================
-:LaunchApp
-echo Starting The Sims Resource Downloader...
-echo.
+:LaunchConsole
 venv\Scripts\python.exe src\main.py
-echo.
-echo The downloader has exited.
-pause
-exit /b
+if errorlevel 1 pause
+exit /b %errorlevel%
 
-
-rem ======================================================================
-rem  Python auto-install block
-rem ======================================================================
 :InstallPython
 echo ======================================================================
 echo  ERROR: Python is not installed or not found in your system PATH.

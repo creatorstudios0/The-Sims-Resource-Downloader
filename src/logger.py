@@ -1,7 +1,7 @@
 import ctypes, logging, os, sys, traceback
 from typing import Type
 from types import TracebackType
-from config import CONFIG
+from config import CONFIG, PROJECT_DIR
 
 
 class ColorFormatter(logging.Formatter):
@@ -36,15 +36,23 @@ def enableWindowsColors() -> None:
 
 
 enableWindowsColors()
+if getattr(sys, "frozen", False):
+    from windows_folders import app_data
+    log_directory = app_data()
+    log_directory.mkdir(parents=True, exist_ok=True)
+else:
+    log_directory = PROJECT_DIR
+
 streamHandler = logging.StreamHandler(sys.stdout)
 streamHandler.setFormatter(ColorFormatter("[%(levelname)s] %(message)s"))
 logging.basicConfig(
     format="[%(asctime)s] [%(levelname)s] %(message)s",
-    filename="logs.log",
+    filename=os.path.join(log_directory, "logs.log"),
     level=logging.DEBUG if CONFIG.get("debug") == True else logging.INFO,
 )
 logger = logging.getLogger(__name__)
-logger.addHandler(streamHandler)
+if sys.stdout is not None:
+    logger.addHandler(streamHandler)
 
 
 def exceptionHandler(
@@ -52,7 +60,7 @@ def exceptionHandler(
 ):
     for line in traceback.TracebackException(type, value, tb).format(chain=True):
         logging.exception(line)
-    logging.exception(type, value, tb)
+    logger.error("Unhandled exception", exc_info=(type, value, tb))
     sys.__excepthook__(type, value, tb)
 
 
