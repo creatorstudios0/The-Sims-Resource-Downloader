@@ -1,12 +1,25 @@
-# The Sims Resource Downloader - Infinity Build `v0.5.2-production`
+# The Sims Resource Downloader & Sims 4 Mod Library
 
-[![License: MIT](https://img.shields.io/github/license/Xientraa/The-Sims-Resource-Downloader?label=License&style=for-the-badge)](./LICENSE)
+[![License: MIT](https://img.shields.io/github/license/creatorstudios0/The-Sims-Resource-Downloader?label=License&style=for-the-badge)](./LICENSE)
 
-Production-ready custom build of **The Sims Resource Downloader**. See [CHANGELOG.md](./CHANGELOG.md) for what's new.
+Download and organize The Sims 4 custom content on Windows. Choose the desktop library for a graphical workspace or the console downloader for clipboard-based downloads.
 
-Original build by **Xientra**. This build adds a startup watermark, captcha prompt removal for TSR's currently broken captcha image response, organized download folders, colored console output, and GitHub-ready cleanup.
+## Downloads
 
-## Features
+| Edition | Get it | What it does |
+| --- | --- | --- |
+| **Sims 4 Mod Library 2.0.0** | [Download Windows EXE](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/download/desktop-v2.0.0/Sims.4.Mod.Library.2.0.exe) · [Release notes](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/tag/desktop-v2.0.0) | Browse The Sims Resource and CurseForge, queue downloads, review installs, scan your library, and back up profiles. |
+| **The Sims Resource Downloader v1.0.3** | [Console release](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/tag/v1.0.3) | Watch the clipboard for The Sims Resource links and download and sort files automatically. |
+
+### Windows desktop app
+
+Download and run `Sims.4.Mod.Library.2.0.exe` on 64-bit Windows. The unsigned executable includes its Python and Qt runtime.
+
+### Console downloader
+
+Extract the source ZIP from the console release and run `start.bat`. It installs the required dependencies on first run. Then copy a The Sims Resource item link to start downloading. If you already have the console downloader, run `start.bat` and accept the v1.0.3 update. This patch fixes corrupted resumed downloads and preserves existing `src/config.json` settings.
+
+## Console features
 
 - Watches your clipboard for The Sims Resource links
 - Downloads multiple items with a configurable active-download limit
@@ -15,15 +28,9 @@ Original build by **Xientra**. This build adds a startup watermark, captcha prom
 - Organizes downloads into `Mod Files`, `Tray Files`, and subfolders
 - Prints a colored console log and branded startup banner
 
-## Download Organization
+## Console download organization
 
-The default download folder is `./Downloads`, which means a `Downloads` folder inside this project. In this local copy it resolves to:
-
-```text
-F:\The-Sims-Resource-Downloader-0.5.1\Downloads
-```
-
-Finished downloads are sorted into folders such as:
+The console downloader saves files in `Downloads/` inside the project by default. Finished downloads are sorted into folders such as:
 
 ```text
 Downloads\Mod Files\CAS
@@ -36,9 +43,9 @@ Downloads\Tray Files\Households
 Downloads\Other Files\Archives
 ```
 
-## Configuration
+## Console configuration
 
-Edit [src/config.json](./src/config.json) to change runtime settings.
+In a fresh v1.0.3 installation, copy `src/config.defaults.json` to `src/config.json` before editing your settings. If `src/config.json` already exists, edit that file.
 
 | Option | Description | Type |
 | - | - | - |
@@ -50,19 +57,7 @@ Edit [src/config.json](./src/config.json) to change runtime settings.
 | `watermark` | Text shown in the startup banner. | string |
 | `debug` | Enables debug logging. | boolean |
 
-## Usage
-
-Simply run:
-
-```sh
-start.bat
-```
-
-The script will automatically set up the virtual environment and install requirements the first time it runs.
-
-Then copy The Sims Resource item links. The downloader monitors your clipboard and queues valid links automatically.
-
-## GitHub Notes
+## Project notes
 
 - Runtime files such as `Downloads/`, logs, saved sessions, and queues are ignored by Git.
 - CI runs `python -m compileall src` on push and pull request.
