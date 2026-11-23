@@ -61,7 +61,7 @@ if /I "%TOOL%"=="--queue" set "TOOL=queue"
 if /I "%TOOL%"=="--settings" set "TOOL=settings"
 if /I "%TOOL%"=="--console-tools" set "TOOL=doctor"
 shift
-venv\Scripts\python.exe src\console_tools.py %TOOL% %*
+venv\Scripts\python.exe src\console_tools.py %TOOL% %2 %3 %4 %5 %6 %7 %8 %9
 exit /b %errorlevel%
 
 :Usage
