@@ -2,6 +2,7 @@ from __future__ import annotations
 from exceptions import InvalidURL
 from logger import logger
 import re, requests
+from urllib.parse import urlsplit
 
 
 class TSRUrl:
@@ -25,10 +26,19 @@ class TSRUrl:
         return None if itemId is None else int(itemId[0])
 
     def __isValidUrl(self, url: str) -> bool:
-        isUrlValid = (
-            re.search(r"thesimsresource.com/", url) is not None
-            and self.__getItemId(url) is not None
-        )
+        """Avoid clipboard-originated requests to fake or untrusted hosts."""
+        parsed = urlsplit(url)
+        try:
+            allowed = (
+                parsed.scheme == "https"
+                and parsed.hostname in {"thesimsresource.com", "www.thesimsresource.com"}
+                and parsed.username is None and parsed.password is None
+                and (parsed.port is None or parsed.port == 443)
+            )
+        except ValueError:
+            allowed = False
+        valid_id = self.__getItemId(parsed.path) if allowed else None
+        isUrlValid = allowed and valid_id is not None and parsed.path.startswith("/downloads/")
         logger.debug(f"Is url valid: {isUrlValid}")
         return isUrlValid
 
