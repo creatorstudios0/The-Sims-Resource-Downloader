@@ -5,7 +5,7 @@
 ## Two editions in one release
 
 - **CreatorStudios Sims 4 Mod Library 2.1.0** — Windows PySide6 desktop executable with the updated CreatorStudios interface, dashboard Quick Switch, Discover integrations, queue, library, backups and new background audit exports.
-- **CreatorStudios Sims 4 Console 1.1.0** — source ZIP with clipboard-based downloader and offline commands for health diagnostics, library audits, queue inspection and settings inspection.
+- **CreatorStudios Sims 4 Console 1.1.0** — source ZIP with its own double-click launcher, lightweight dependencies, clipboard-based downloader and offline commands for health diagnostics, library audits, queue inspection and settings inspection.
 - **SHA256SUMS.txt** — SHA-256 checksums for both downloadable files.
 
 ## Highlights
