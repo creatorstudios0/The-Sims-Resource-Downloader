@@ -19,6 +19,7 @@ class TSRUrl:
             re.search(r"(?<=/id/)[\d]+", url)
             or re.search(r"(?<=/itemId/)[\d]+", url)
             or re.search(r"(?<=.com/downloads/)[\d]+", url)
+            or re.search(r"(?<=/downloads/)[\d]+", url)
         )
         logger.debug(
             f"Got ItemId: {itemId[0] if itemId is not None else 'None'} from Url: {url}"
@@ -27,8 +28,8 @@ class TSRUrl:
 
     def __isValidUrl(self, url: str) -> bool:
         """Avoid clipboard-originated requests to fake or untrusted hosts."""
-        parsed = urlsplit(url)
         try:
+            parsed = urlsplit(url)
             allowed = (
                 parsed.scheme == "https"
                 and parsed.hostname in {"thesimsresource.com", "www.thesimsresource.com"}
