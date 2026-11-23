@@ -38,7 +38,7 @@ Downloads\Other Files\Archives
 
 ## Configuration
 
-Edit [src/config.json](./src/config.json) to change runtime settings.
+Keep your existing src/config.json when upgrading. To customize a fresh installation, copy src/config.defaults.json to src/config.json and edit your copy.
 
 | Option | Description | Type |
 | - | - | - |

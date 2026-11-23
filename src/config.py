@@ -16,7 +16,11 @@ CONFIG_DICT = typing.TypedDict(
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(CURRENT_DIR)
 
-with open(os.path.join(CURRENT_DIR, "config.json"), "r") as f:
+configPath = os.path.join(CURRENT_DIR, "config.json")
+if not os.path.exists(configPath):
+    configPath = os.path.join(CURRENT_DIR, "config.defaults.json")
+
+with open(configPath, "r") as f:
     CONFIG: CONFIG_DICT = json.load(f)
 
 

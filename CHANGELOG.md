@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Prevented corrupted files when a server returned a full response during a download resume.
 - Reject partial responses that do not start at the requested byte offset.
+- Ship defaults separately so upgrades preserve existing config.json settings.
 
 ---
 

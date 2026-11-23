@@ -176,3 +176,4 @@ src/captcha.png
 session
 src/session
 .version
+/src/config.json
