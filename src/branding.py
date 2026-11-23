@@ -2,12 +2,12 @@ from __future__ import annotations
 import os
 from config import CONFIG, PROJECT_DIR
 
-APP_NAME = "The Sims Resource Downloader"
+APP_NAME = "CreatorStudios Sims 4 Console"
 ORIGINAL_AUTHOR = "Xientra"
-BUILD_CREDIT = "Production build maintained by Infinity"
+BUILD_CREDIT = "A CreatorStudios product"
 
 _VERSION_FILE = os.path.join(PROJECT_DIR, ".version")
-_FALLBACK_VERSION = "v1.0.2"
+_FALLBACK_VERSION = "v1.1.0"
 
 
 def getAppVersion() -> str:

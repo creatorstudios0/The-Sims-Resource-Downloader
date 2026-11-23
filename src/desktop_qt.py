@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import csv
 import logging
-import msvcrt
 import os
 import sys
 
@@ -26,6 +25,7 @@ from qt_services import (
 from qt_theme import ProgressPainter, button, icon, label, row, scroll_area, selected, surface, table, theme, update_rows
 from sims_install import installed_path, MOD_EXTENSIONS
 from desktop_data import fetch_thumbnail
+from library_insights import audit_to_file, format_summary
 from palette_search import match_commands
 from windows_folders import detect_game
 from website_links import WebsiteLinkServer, forward_link, parse_install_link, set_registration
@@ -359,7 +359,8 @@ class MainWindow(QMainWindow):
         hero.addWidget(label("Find new content, manage your collection, and keep your game organized — powered by CreatorStudios.", "secondary", True))
         hero.addLayout(row(button("Explore content", lambda: self.go(4), True, "search"),
                            button("View my library", lambda: self.go(2), glyph="library"),
-                           button("Run health scan", self.s.scan, glyph="refresh"), None))
+                           button("Run health scan", self.s.scan, glyph="refresh"),
+                           button("Export mod audit", self.export_audit, glyph="folder"), None))
         layout.addWidget(spotlight)
         quick, controls = surface()
         controls.addWidget(label("Quick actions", "section"))
@@ -883,6 +884,25 @@ class MainWindow(QMainWindow):
             self.s.publish()
             self.inform(f"Saved {name}.", "success")
 
+    def export_audit(self):
+        """Run a read-only Sims 4 inventory audit outside the UI thread."""
+        if "creatorstudios-audit" in self.s.jobs:
+            self.inform("An inventory audit is already running.", "warning")
+            return
+        game = self.s.game()
+        if not game:
+            self.inform("Choose your Sims 4 user data folder in Settings first.", "warning")
+            self.go(6)
+            return
+        name = str(Path(self.s.settings["downloads"]) / "CreatorStudios-Mod-Audit.json")
+        destination, _ = QFileDialog.getSaveFileName(
+            self, "Export CreatorStudios mod audit", name,
+            "JSON report (*.json);;CSV report (*.csv)")
+        if destination:
+            self.s.job("creatorstudios-audit", audit_to_file,
+                       self.s.mods(), str(game / "Tray"), destination)
+            self.inform("Scanning your library without modifying any game files.", "info")
+
     def profile_backups(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("Profile backups")
@@ -1184,6 +1204,7 @@ class MainWindow(QMainWindow):
                           ("backup_enabled", "Back up managed files before uninstalling")):
             controls.addWidget(self.setting_toggle(key, name))
         controls.addLayout(row(button("Refresh library", self.s.scan, glyph="refresh"),
+                               button("Export audit report", self.export_audit),
                                button("Clean partial downloads", self.clean_cache), None))
         layout.addWidget(library)
 
@@ -1484,6 +1505,10 @@ class MainWindow(QMainWindow):
             elif not self.closing and error:
                 if self.confirm("Release check unavailable", "Open the upstream release page in your browser?"):
                     QDesktopServices.openUrl(QUrl(RELEASES))
+        elif job == "creatorstudios-audit" and not error:
+            report, destination = value
+            self.inform("Audit exported: " + format_summary(report), "success")
+            self.diagnostics.setToolTip(f"Last audit report: {destination}")
         elif job == "cleanup" and not error:
             self.inform(f"Removed {value} partial download file(s).", "success")
         if error and job != "release" and not self.closing:
@@ -1555,6 +1580,9 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    # Only the Windows entry point needs the native file lock; Linux CI imports
+    # the UI for offscreen regression tests without the msvcrt module.
+    import msvcrt
     arguments = sys.argv[1:]
     link = arguments[0] if len(arguments) == 1 else None
     app = QApplication([sys.argv[0]])

@@ -85,7 +85,7 @@ The private preview uses fictional listings and original generated artwork from 
 
 This project is based on the original **The Sims Resource Downloader** by Xientra and remains under the MIT License. See [NOTICE.md](./NOTICE.md) and [LICENSE](./LICENSE).
 
-## CreatorStudios desktop interface (proposed)
+## CreatorStudios desktop interface
 
 The Windows Qt desktop preview has a CreatorStudios visual refresh: a violet-accented
 workspace, a dashboard with direct library/discovery/scan actions, and a keyboard-driven
@@ -93,10 +93,7 @@ workspace, a dashboard with direct library/discovery/scan actions, and a keyboar
 command; Escape closes the dialog). Existing downloads, installs, profiles, backups,
 settings, and console operations use their previous implementations.
 
-This change is staged for review on a feature branch and does not alter the console
-edition. The desktop code is in the open Discover integration line; merging this UI
-branch into `main` should be coordinated with that integration rather than applied
-on top of the console-only default branch without review.
+The CreatorStudios interface retains the existing download, install, backup and console features.
 
 ### Verification on Windows
 
@@ -109,3 +106,52 @@ venv\Scripts\python.exe -m pytest -q
 Smoke-test at 785px minimum width and at 1320px: sidebar collapse, Ctrl+K matching,
 Enter/Escape behavior, keyboard navigation, library selection and install preview,
 folder scans, backups and restores, and readability with custom accent colors.
+
+## CreatorStudios Sims 4 Suite 2.1.0
+
+**Desktop 2.1.0 + Console 1.1.0.** The release workflow packages a Windows desktop
+executable and separate portable console ZIP in the same GitHub Release. See
+[release notes](./RELEASE_NOTES_2.1.0.md). The release workflow publishes after
+the default-branch build and test gates pass; manual QA remains recommended.
+
+### Windows console commands
+
+```bat
+Run Console.bat
+start.bat --console
+start.bat --doctor
+start.bat --audit
+start.bat --audit --output "C:\\Users\\Public\\CreatorStudios-Audit.json"
+start.bat --queue --all
+start.bat --settings
+```
+
+The **audit** is read-only: it counts installed .package, .ts4script and Tray files,
+including .disabled mods, flags exact byte-identical groups, and can export JSON or
+CSV. Duplicate results are advisory; the program never deletes duplicates. Folder
+scanning skips links and limits the number of indexed files.
+
+### Desktop audit
+
+Use **Dashboard → Export mod audit** or **Settings → Library management → Export
+audit report** to save a report. The work runs outside the UI thread. Press
+**Ctrl+K** to open CreatorStudios Quick Switch.
+
+### Developer checks
+
+```powershell
+python -m pip install -r requirements.txt pytest pytest-qt
+$env:PYTHONPATH="src;scripts"
+$env:QT_QPA_PLATFORM="offscreen"
+python -m compileall src scripts tests
+python -m pytest -q
+python scripts/package_console.py
+```
+
+On Windows, prepare the venv, install PyInstaller and run
+`powershell -ExecutionPolicy Bypass -File .\\build-desktop.ps1`.
+
+**Upgrade warning:** Install a fresh console ZIP alongside your old installation,
+or manually transfer your original `src/config.json`, session, queue and Downloads
+folder after backing them up. The launcher no longer overwrites configuration by
+automatically applying source ZIP updates.
