@@ -1,11 +1,44 @@
 const $ = id => document.getElementById(id);
 const browse = document.body.dataset.view === "browse";
 const sample = document.body.dataset.mode === "sample";
+const apache = document.body.dataset.host === "apache";
+const detailId = apache ? new URLSearchParams(location.search).get("mod") : location.pathname.split("/").pop();
+const isBrowse = apache ? !detailId : browse;
+if (apache) document.body.dataset.view = isBrowse ? "browse" : "detail";
 const allCategories = ["All", "Hair", "Clothing", "Build & Buy", "Lots", "Households", "Gameplay"];
 const escaped = value => String(value ?? "").replace(/[&<>"']/g, char =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const plain = value => escaped(value || "Unknown");
-const route = id => "/mods/" + encodeURIComponent(id);
+const route = id => (apache ? "?mod=" : "/mods/") + encodeURIComponent(id);
+const catalogUrl = apache ? "./catalog.json" : "/api/catalog";
+let apacheCatalog;
+
+async function getApacheCatalog() {
+  if (!apacheCatalog) {
+    const data = await get(catalogUrl);
+    if (!Array.isArray(data)) throw new Error("The local catalog must contain a JSON array.");
+    apacheCatalog = data;
+  }
+  return apacheCatalog;
+}
+
+async function searchApache(params) {
+  const data = await getApacheCatalog();
+  const value = key => (params.get(key) || "").toLowerCase();
+  const found = data.filter(item => (!value("category") || item.category.toLowerCase() === value("category")) &&
+    (!value("creator") || item.creator.toLowerCase().includes(value("creator"))) &&
+    (!value("style") || item.style.toLowerCase() === value("style")) &&
+    (!value("pack") || item.packs?.some(pack => pack.toLowerCase() === value("pack"))) &&
+    [item.name, item.creator, item.summary, item.category].join(" ").toLowerCase().includes(value("q")));
+  const start = (Number(params.get("page") || 1) - 1) * 6;
+  return { items: found.slice(start, start + 6), total: found.length, next: start + 6 < found.length };
+}
+
+async function detailApache(id) {
+  const item = (await getApacheCatalog()).find(entry => entry.id === id);
+  if (!item) throw new Error("This resource could not be found.");
+  return { ...item, sample: true, file: null };
+}
 
 function image(item, detail = false) {
   if (item.sample && Number.isInteger(item.tile) && item.tile >= 0 && item.tile < 6) {
@@ -22,7 +55,7 @@ async function get(url, signal) {
   return payload;
 }
 
-if (browse) {
+if (isBrowse) {
   const fields = { q: $("query"), creator: $("creator"), style: $("style"), pack: $("pack") };
   const stored = new URLSearchParams(location.search);
   for (const [key, control] of Object.entries(fields)) control.value = stored.get(key) || "";
@@ -55,7 +88,7 @@ if (browse) {
     request = new AbortController();
     const signal = request.signal;
     const params = query().toString();
-    history.replaceState(null, "", "/" + (params ? "?" + params : "") + location.hash);
+    history.replaceState(null, "", location.pathname + (params ? "?" + params : "") + location.hash);
     for (const control of $("categories").children) {
       control.setAttribute("aria-pressed", control.dataset.category === category);
     }
@@ -63,7 +96,8 @@ if (browse) {
     $("pagination").hidden = true;
     $("results").setAttribute("aria-busy", "true");
     try {
-      const data = await get("/api/catalog" + (params ? "?" + params : ""), signal);
+      const data = apache ? await searchApache(new URLSearchParams(params))
+        : await get(catalogUrl + (params ? "?" + params : ""), signal);
       if (signal.aborted) return;
       $("results-status").textContent = Number.isInteger(data.total)
         ? data.total.toLocaleString() + (data.total === 1 ? " resource" : " resources")
@@ -116,12 +150,13 @@ if (browse) {
   $("next").addEventListener("click", () => { page++; update(true); });
   update();
 } else {
-  const back = '<a class="back" href="/#catalog">Back to Discover</a>';
-  const id = location.pathname.split("/").pop();
+  const back = '<a class="back" href="' + (apache ? './#catalog' : '/#catalog') + '">Back to Discover</a>';
+  const loadDetail = apache ? detailApache(detailId) : get("/api/mods/" + encodeURIComponent(detailId));
 
-  get("/api/mods/" + encodeURIComponent(id)).then(item => {
+  loadDetail.then(item => {
     document.title = item.name + " · Sims 4 Mod Library";
-    const source = item.source ? '<a class="btn secondary" href="' + escaped(item.source) + '">Visit creator</a>' : "";
+    const source = /^https?:\/\//i.test(item.source || "")
+      ? '<a class="btn secondary" href="' + escaped(item.source) + '">Visit creator</a>' : "";
     const validId = value => /^[1-9][0-9]{0,9}$/.test(value) && Number(value) <= 4294967295;
     const link = !item.sample && validId(item.id) && validId(item.file?.id)
       ? "sims4modlibrary://curseforge/install?project=" + item.id + "&amp;file=" + item.file.id : "";

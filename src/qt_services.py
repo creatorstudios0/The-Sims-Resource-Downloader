@@ -17,6 +17,7 @@ from PySide6.QtCore import QObject, Qt, Signal, Slot
 
 from config import CONFIG, CURRENT_DIR, PROJECT_DIR
 import curseforge
+from game_recovery import backup_content, read_patch
 from desktop_data import fetch_item, inspect_item, parse_url, save_json
 from download_organizer import getDownloadCategory, MOD_EXTENSIONS
 from exceptions import InvalidURL
@@ -254,6 +255,7 @@ class LibraryService(QObject):
         self.disk = {}
         self.library_present = {}
         self.scanned_sources = {}
+        self.patch_version = None
         self.health = {}
         self.paused = True
         self.closing = False
@@ -317,6 +319,7 @@ class LibraryService(QObject):
         self.scanned_sources.clear()
         self.publish()
         self.scan()
+        self.check_patch()
         logger.info("Restored profile backup %s", snapshot.name)
 
     def publish(self, persist=True):
@@ -478,6 +481,11 @@ class LibraryService(QObject):
             if key == "cleanup":
                 self.pump()
                 self.save()
+            if key == "patch-check" and value is not None:
+                self.commit_patch(*value)
+            elif key == "content-backup" and value is not None:
+                self.state["lastContentBackup"] = value
+                self.save()
             if key.startswith("install:"):
                 self.commit_install(key.split(":", 1)[1], value, error)
             elif key.startswith("rename:") and value is not None:
@@ -539,6 +547,38 @@ class LibraryService(QObject):
 
     def mods(self):
         return self.settings["mods"] or str(self.game() / "Mods" if self.game() else "")
+
+    def patch_versions(self):
+        game = self.game()
+        current = self.patch_version[1] if self.patch_version and self.patch_version[0] == str(game) else None
+        reviewed = self.state.get("reviewedGameVersions", {}).get(str(game))
+        return current, reviewed
+
+    def check_patch(self):
+        if self.game():
+            self.job("patch-check", read_patch, self.game())
+
+    def commit_patch(self, folder, version):
+        if folder != str(self.game()):
+            self.check_patch()
+            return
+        self.patch_version = folder, version
+        reviewed = self.state.setdefault("reviewedGameVersions", {})
+        if version and folder not in reviewed:
+            reviewed[folder] = version
+            self.save()
+
+    def mark_patch_reviewed(self):
+        version, previous = self.patch_versions()
+        if version and version != previous:
+            self.state.setdefault("reviewedGameVersions", {})[str(self.game())] = version
+            self.publish()
+
+    def create_content_backup(self, target):
+        if self.mutating_files():
+            raise ValueError("Wait for active file operations to finish before creating a backup.")
+        game, _ = self.install_destination()
+        self.job("content-backup", backup_content, game, self.mods(), target)
 
     def auto_scan(self):
         if self.settings["auto_scan"]:
@@ -735,7 +775,8 @@ class LibraryService(QObject):
         self.scan()
 
     def mutating_files(self):
-        return any(name.startswith(("install:", "rename:", "uninstall:")) for name in self.jobs)
+        return "content-backup" in self.jobs or any(name.startswith(("install:", "rename:", "uninstall:"))
+                                                    for name in self.jobs)
 
     def update_settings(self, game, settings):
         if game:
@@ -747,6 +788,7 @@ class LibraryService(QObject):
         self.publish()
         self.pump_installs()
         self.auto_scan()
+        self.check_patch()
 
     def clear_partials(self):
         if not self.active:

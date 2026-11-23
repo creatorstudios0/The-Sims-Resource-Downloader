@@ -17,6 +17,9 @@
 - Read-only mod and Tray inventory exports as JSON or CSV.
 - Reports exact byte-identical duplicates, duplicate filenames, disabled files, and warnings.
 - Background auditing so large libraries do not block the interface.
+- Patch Day Checkup flags a changed game version and opens the script mod list for review.
+- Mods and Tray backup ZIPs preserve folder structure and quarantined content.
+- The Discover site can be exported as an editable, static Apache/XAMPP sample catalog.
 
 ### Console
 - `start.bat --console` runs the existing clipboard downloader.

@@ -109,6 +109,7 @@ class MainWindow(QMainWindow):
         self.go(0)
         self.refresh()
         self.s.auto_scan()
+        self.s.check_patch()
         self.s.pump_installs()
         if self.s.recovered:
             self.inform(f"Recovered the library from {self.s.recovered.name}.", "success")
@@ -368,6 +369,27 @@ class MainWindow(QMainWindow):
                                button("Import files", self.add_files, glyph="plus"),
                                button("Refresh Library", self.s.scan, glyph="refresh"), None))
         layout.addWidget(quick)
+
+        patch, controls = surface()
+        controls.addWidget(label("Patch Day Checkup", "section"))
+        self.patch_summary = label("", "secondary", True)
+        controls.addWidget(self.patch_summary)
+        self.patch_check = button("Check game version", self.s.check_patch, glyph="refresh")
+        self.patch_reviewed = button("Mark reviewed", self.s.mark_patch_reviewed, glyph="check")
+        advice = "https://help.ea.com/en/articles/the-sims/the-sims-4/mods-and-the-sims-4-game-updates/"
+        controls.addLayout(row(self.patch_check, button("Review script mods", self.review_script_mods),
+                               self.patch_reviewed, button("EA patch guide", lambda: QDesktopServices.openUrl(QUrl(advice))), None))
+        layout.addWidget(patch)
+
+        backup, controls = surface()
+        controls.addWidget(label("Mods and Tray backups", "section"))
+        self.backup_summary = label("", "secondary", True)
+        self.backup_summary.setTextFormat(Qt.TextFormat.PlainText)
+        controls.addWidget(self.backup_summary)
+        self.backup_create = button("Create backup ZIP", self.create_content_backup, True, "plus")
+        self.backup_open = button("Open last backup", self.open_content_backup, glyph="folder")
+        controls.addLayout(row(self.backup_create, self.backup_open, None))
+        layout.addWidget(backup)
         recent, contents = surface()
         contents.addWidget(label("Recently installed", "section"))
         self.recent_empty = label("No installations have been recorded yet.", "secondary")
@@ -383,6 +405,64 @@ class MainWindow(QMainWindow):
         layout.addWidget(health)
         layout.addStretch()
         return scroll_area(page)
+
+
+    def review_script_mods(self):
+        self.go(2)
+        self.category_filter.setCurrentText("All categories")
+        self.profile_control.setCurrentIndex(0)
+        self.search.setText(".ts4script")
+        self.search.setFocus()
+
+    def create_content_backup(self):
+        folder = Path(self.s.settings["backup"])
+        if not folder.is_dir():
+            folder = Path.home() / "Documents"
+        name = datetime.now().strftime("Sims 4 Content Backup %Y-%m-%d %H%M%S.zip")
+        target, _ = QFileDialog.getSaveFileName(
+            self, "Back up Mods and Tray", str(folder / name), "ZIP archives (*.zip)",
+            options=QFileDialog.Option.DontConfirmOverwrite,
+        )
+        if target:
+            try:
+                self.s.create_content_backup(target)
+            except (OSError, ValueError) as error:
+                self.inform(failure_message(error), "error")
+
+    def open_content_backup(self):
+        path = self.s.state.get("lastContentBackup", {}).get("path")
+        if path and Path(path).is_file():
+            if QDesktopServices.openUrl(QUrl.fromLocalFile(path)):
+                return
+        self.inform("The last backup ZIP could not be opened.", "warning")
+
+    def refresh_recovery(self):
+        current, reviewed = self.s.patch_versions()
+        checking = "patch-check" in self.s.jobs
+        if checking:
+            self.patch_summary.setText("Checking the installed game version…")
+        elif not self.s.game():
+            self.patch_summary.setText("Choose your Sims 4 user data folder in Settings.")
+        elif not current:
+            self.patch_summary.setText("Game version unavailable. Launch The Sims 4 once, then check again.")
+        elif current != reviewed:
+            self.patch_summary.setText(
+                f"Game version changed from {reviewed or 'unknown'} to {current}. Review script mods before re-enabling them."
+            )
+        else:
+            self.patch_summary.setText(f"Game version {current} · reviewed baseline")
+        self.patch_check.setEnabled(bool(self.s.game()) and not checking)
+        self.patch_reviewed.setEnabled(bool(current and current != reviewed and not checking))
+        backing_up = "content-backup" in self.s.jobs
+        last = self.s.state.get("lastContentBackup", {})
+        if backing_up:
+            self.backup_summary.setText("Creating a ZIP of Mods and Tray…")
+        elif last:
+            self.backup_summary.setText(f"Last backup · {Path(last['path']).name} · {last['files']} files")
+        else:
+            self.backup_summary.setText("Save a ZIP with your Mods and Tray folder structure.")
+        self.backup_create.setEnabled(bool(self.s.game()) and not self.s.mutating_files())
+        self.backup_open.setEnabled(bool(last) and not backing_up)
 
     def discover_page(self):
         self.discover = DiscoverPage(self)
@@ -1509,12 +1589,18 @@ class MainWindow(QMainWindow):
             report, destination = value
             self.inform("Audit exported: " + format_summary(report), "success")
             self.diagnostics.setToolTip(f"Last audit report: {destination}")
+        elif job == "content-backup" and not error:
+            count = value["files"]
+            skipped = value["skipped"]
+            extra = f" Skipped {skipped} linked or special entries." if skipped else ""
+            self.inform(f"Saved a content backup with {count} files." + extra, "warning" if skipped else "success")
         elif job == "cleanup" and not error:
             self.inform(f"Removed {value} partial download file(s).", "success")
         if error and job != "release" and not self.closing:
             self.inform(error, "error")
 
     def refresh(self):
+        self.refresh_recovery()
         hidden = set(self.s.state["queueHidden"])
         rows = [(key, self.queue_cells(key)) for key, item in self.s.items.items()
                 if item.get("url") and (key not in hidden or item["status"] != "Complete")]

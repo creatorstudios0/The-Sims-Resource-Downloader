@@ -75,11 +75,15 @@ powershell -ExecutionPolicy Bypass -File .\build-desktop.ps1
 venv\Scripts\python.exe -m pytest -q
 ```
 
+Dashboard **Patch Day Checkup** flags game version changes. **Create backup ZIP** saves the current Mods and Tray content, including subfolders and quarantined files. Use **Open last backup** to locate the archive and extract selected files into their matching folders.
+
 ## Discover website
 
 From the `website` directory, run `node build.mjs` and `node dev.mjs`. The local preview uses sample data and is available at `http://127.0.0.1:8766`. Use `node --test catalog.test.mjs` after building to verify the catalog.
 
 The private preview uses fictional listings and original generated artwork from a six-panel brief featuring a cottage, hairstyle, kitchen, outfit, family, and study. Set the approved `CURSEFORGE_API_KEY` on the server to enable live Sims 4 search. That key is read only by the Worker. Source sites handle files that are unavailable for third-party downloads. The site links to The Sims Resource and does not host its content.
+
+For an editable Apache/XAMPP sample catalog, run `node build.mjs` and `node export-apache.mjs C:/xampp/htdocs/sims4-mod-library` from `website`. Use a new destination when exporting so existing edits are preserved.
 
 ## Attribution
 
