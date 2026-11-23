@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Discover custom content and manage your Sims 4 downloads.">
+  <title>Discover · Sims 4 Mod Library</title>
+  <link rel="stylesheet" href="/assets/site.css">
+  <script defer src="/assets/site.js"></script>
+</head>
+<body data-mode="sample" data-view="browse">
+  <a class="skip" href="#content">Skip to content</a>
+  <header class="top">
+    <div class="wrap nav">
+      <a class="brand" href="/"><span class="mark" aria-hidden="true"><i></i></span><span>Sims 4 <strong>Mod Library</strong></span></a>
+      <nav aria-label="Main navigation"><a class="nav-current" href="/">Discover</a><a href="/#manager">Download manager</a></nav>
+      <a class="btn secondary nav-download" href="/#manager">Get the Windows app</a>
+    </div>
+  </header>
+  <main id="content" class="wrap">
+    <section class="hero browse-only" aria-labelledby="hero-title">
+      <div class="hero-art" aria-hidden="true"><div class="tile tile-0"></div></div>
+      <div class="hero-copy">
+        <p class="type-label"><span></span> THE SIMS 4 CUSTOM CONTENT</p>
+        <h1 id="hero-title">Make your Sims’<br> world <em>yours.</em></h1>
+        <p>Find your next favorite mod, build, or look. Send supported downloads to your Windows library in a click.</p>
+        <div class="hero-actions"><a class="btn primary" href="#catalog">Browse the catalog</a><a class="btn secondary" href="#manager">How installs work</a></div>
+      </div>
+    </section>
+    <section id="catalog" class="catalog browse-only" aria-labelledby="catalog-title">
+      <div class="section-heading">
+        <div><h2 id="catalog-title">Discover mods</h2><p>Browse custom content for the way you play.</p></div>
+        <form id="search-form" class="search" role="search">
+          <span aria-hidden="true"></span><label class="sr-only" for="query">Search the catalog</label>
+          <input id="query" name="q" type="search" placeholder="Search mods, CC, creators…" maxlength="100">
+          <button class="btn secondary" type="submit">Search</button>
+        </form>
+      </div>
+      <div id="categories" class="categories" aria-label="Content type"></div>
+      <div class="filters">
+        <label class="field"><span>Creator</span><input id="creator" placeholder="Any creator" maxlength="80"></label>
+        <label class="field"><span>Style</span><select id="style"><option value="">Any style</option><option>Maxis Match</option><option>Alpha</option></select></label>
+        <label class="field sample-only"><span>Required pack</span><select id="pack"><option value="">Any pack</option><option>Base game</option><option>Cottage Living</option><option>Growing Together</option></select></label>
+        <button id="clear" class="text-button" type="button">Clear filters</button>
+      </div>
+      <div class="results-heading">
+        <p id="results-status" role="status" aria-live="polite">Loading catalog…</p>
+        <p class="preview-note sample-only">Sample preview · fictional listings</p>
+      </div>
+      <div id="results" class="grid"></div>
+      <div id="pagination" class="pagination" hidden>
+        <button id="previous" class="btn secondary" type="button">Previous</button>
+        <span id="page-label"></span>
+        <button id="next" class="btn secondary" type="button">Next</button>
+      </div>
+    </section>
+    <section id="detail" class="detail detail-only" aria-live="polite">
+      <a class="back" href="/#catalog">Back to Discover</a>
+      <p>Loading resource…</p>
+    </section>
+    <section class="manager" id="manager" aria-labelledby="manager-title">
+      <div><h2 id="manager-title">Install with Mod Library</h2><p>On Windows, enable website links in Mod Library settings. Open a supported resource, review its files, and let the app sort them into Mods or Tray.</p></div>
+      <a class="btn primary" href="https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases">View Windows releases</a>
+    </section>
+  </main>
+  <footer class="wrap footer"><a class="brand" href="/">Sims 4 <strong>Mod Library</strong></a><span>Independent community project for The Sims 4.</span><a href="https://www.thesimsresource.com/">The Sims Resource</a></footer>
+</body>
+</html>

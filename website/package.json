@@ -1,0 +1,10 @@
+{
+  "name": "sims4-mod-library-catalog",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs && node dev.mjs",
+    "test": "node build.mjs && node --test catalog.test.mjs"
+  }
+}

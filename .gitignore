@@ -176,3 +176,12 @@ src/captcha.png
 session
 src/session
 .version
+
+/desktop-state.json
+/desktop-state.tmp
+/desktop-state.lock
+/desktop-state-backups/
+
+# Local desktop builds
+/build/
+/dist/
