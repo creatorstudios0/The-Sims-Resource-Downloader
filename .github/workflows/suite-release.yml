@@ -1,0 +1,76 @@
+name: CreatorStudios Sims 4 Suite Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'suite-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONPATH: src:scripts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python dependencies and test tools
+        run: python -m pip install -r requirements.txt pytest pytest-qt
+      - name: Compile both editions
+        run: python -m compileall -q src scripts tests
+      - name: Run regression suite
+        run: python -m pytest -q
+
+  windows-release:
+    needs: verify
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare desktop environment
+        shell: pwsh
+        run: |
+          python -m venv venv
+          .\venv\Scripts\python.exe -m pip install -r requirements.txt pyinstaller pytest pytest-qt
+      - name: Compile source and execute Windows tests
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PYTHONPATH: src;scripts
+        run: |
+          .\venv\Scripts\python.exe -m compileall -q src scripts tests
+          .\venv\Scripts\python.exe -m pytest -q
+      - name: Build desktop EXE
+        shell: pwsh
+        run: .\build-desktop.ps1
+      - name: Package console ZIP
+        shell: pwsh
+        run: .\venv\Scripts\python.exe scripts/package_console.py
+      - name: Generate SHA256 manifest
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -File | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+      - name: Upload combined release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CreatorStudios-Sims4-Suite-Windows
+          path: dist/*
+          if-no-files-found: error
+      - name: Publish both editions to tagged GitHub Release
+        if: startsWith(github.ref, 'refs/tags/suite-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release create "${{ github.ref_name }}" --title "CreatorStudios Sims 4 Suite ${{ github.ref_name }}" --generate-notes --draft dist/*
