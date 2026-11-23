@@ -38,6 +38,23 @@ def test_backup_preserves_subfolders_and_quarantined_files(tmp_path):
         backup_content(game, mods, mods / "recursive.zip")
 
 
+@pytest.mark.parametrize("folder_name", ["Mods", "Tray"])
+def test_backup_rejects_windows_junction_roots(tmp_path, folder_name):
+    winapi = pytest.importorskip("_winapi")
+    game = tmp_path / "game"
+    game.mkdir()
+    relocated = tmp_path / "relocated"
+    relocated.mkdir()
+    (relocated / "sample.package").write_bytes(b"sample")
+    winapi.CreateJunction(str(relocated), str(game / folder_name))
+    output = tmp_path / "content.zip"
+
+    with pytest.raises(ValueError, match=rf"{folder_name} folder is a filesystem link"):
+        backup_content(game, game / "Mods", output)
+
+    assert not output.exists()
+
+
 def test_read_game_version_handles_missing_or_unrecognized_metadata(tmp_path):
     assert game_version(tmp_path) is None
     version = tmp_path / "GameVersion.txt"
