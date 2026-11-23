@@ -5,7 +5,7 @@ import argparse
 import hashlib
 
 ROOT = Path(__file__).resolve().parents[1]
-DOCUMENTS = ("README.md", "LICENSE", "NOTICE.md", "CHANGELOG.md", "requirements.txt", "start.bat")
+DOCUMENTS = ("README.md", "LICENSE", "NOTICE.md", "CHANGELOG.md", "requirements.txt", "requirements-console.txt", "start.bat", "Run Console.bat")
 CONSOLE_VERSION = "1.1.0"
 
 
