@@ -22,10 +22,11 @@ ICONS = {
     "plus": "M12 5v14M5 12h14",
     "search": "M15 15l5 5 M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z",
     "console": "M3 5h18v14H3z M6 9l3 3-3 3 M12 15h5",
+    "sparkles": "m12 2 2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3L12 2z",
 }
 
 
-def icon(name, color="#94A4BA"):
+def icon(name, color="#A2A8C4"):
     path = ICONS[name]
     data = QByteArray(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="{path}" fill="none" stroke="{color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>'.encode())
     renderer = QSvgRenderer(data)
@@ -41,52 +42,57 @@ def icon(name, color="#94A4BA"):
 def theme(accent, compact=False):
     density = "5px 9px" if compact else "8px 12px"
     return f"""
-    * {{ font-family: 'Segoe UI'; font-size: 10pt; color: #ECF1FA; }}
-    QMainWindow, QWidget#workspace, QWidget#scrollViewport {{ background: #0D141E; }}
-    QFrame#sidebar {{ background: #101722; border-right: 1px solid #253244; }}
-    QFrame#surface, QFrame#stat {{ background: #151E2B; border: 1px solid #293545; border-radius: 11px; }}
-    QFrame#stat {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1A2B38, stop:1 #151E2B); }}
-    QLabel#pageTitle {{ font-size: 28pt; font-weight: 700; }}
+    * {{ font-family: 'Segoe UI'; font-size: 10pt; color: #F1F0FF; }}
+    QMainWindow, QWidget#workspace, QWidget#scrollViewport {{ background: #0C0D18; }}
+    QFrame#sidebar {{ background: #111322; border-right: 1px solid #253244; }}
+    QFrame#surface, QFrame#stat {{ background: #191C30; border: 1px solid #30334C; border-radius: 11px; }}
+    QFrame#stat {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2A2749, stop:1 #191C30); }}
+    QLabel#pageTitle {{ font-size: 27pt; font-weight: 700; color: #F5F2FF; }}
+    QLabel#heroTitle {{ font-size: 21pt; font-weight: 750; color: #FFFFFF; }}
+    QFrame#hero {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #32244F, stop:0.55 #252547, stop:1 #1B304B); border: 1px solid #67518C; border-radius: 18px; }}
+    QFrame#hero QLabel#secondary {{ color: #D3D1E8; }}
+    QPushButton#brandButton {{ font-size: 11pt; font-weight: 800; letter-spacing: 1px; color: #E1D6FF; border: none; background: transparent; text-align: left; }}
+    QPushButton#brandButton:hover {{ background: #292541; }}
     QLabel#section {{ font-size: 13pt; font-weight: 650; }}
     QLabel#statValue {{ font-size: 23pt; font-weight: 700; color: {accent}; }}
-    QLabel#secondary {{ color: #94A4BA; }}
+    QLabel#secondary {{ color: #A2A8C4; }}
     QLabel#positive {{ color: #52D6AC; }}
-    QLabel#eyebrow {{ color: #94A4BA; font-size: 8pt; font-weight: 700; }}
+    QLabel#eyebrow {{ color: #A2A8C4; font-size: 8pt; font-weight: 700; }}
     QPushButton, QToolButton, QComboBox, QSpinBox, QDateEdit {{
-        background: #1B2837; border: 1px solid #293545; border-radius: 8px; padding: {density};
+        background: #23273C; border: 1px solid #30334C; border-radius: 8px; padding: {density};
     }}
-    QPushButton:hover, QToolButton:hover {{ background: #24364A; border-color: #486078; }}
+    QPushButton:hover, QToolButton:hover {{ background: #303552; border-color: #7B6AB3; }}
     QPushButton:focus, QToolButton:focus, QComboBox:focus, QSpinBox:focus, QDateEdit:focus,
     QLineEdit:focus, QPlainTextEdit:focus, QTableView:focus, QListView:focus {{ border: 1px solid {accent}; }}
-    QPushButton:disabled {{ color: #65778D; background: #151E2B; }}
-    QPushButton[primary="true"] {{ background: {accent}; color: #0D141E; font-weight: 700; border-color: {accent}; }}
-    QPushButton[primary="true"]:hover {{ background: #65EDBF; }}
-    QPushButton[primary="true"]:disabled {{ color: #65778D; background: #151E2B; border-color: #293545; }}
+    QPushButton:disabled {{ color: #65778D; background: #191C30; }}
+    QPushButton[primary="true"] {{ background: {accent}; color: #0C0D18; font-weight: 700; border-color: {accent}; }}
+    QPushButton[primary="true"]:hover {{ background: #CAB9FF; }}
+    QPushButton[primary="true"]:disabled {{ color: #65778D; background: #191C30; border-color: #30334C; }}
     QPushButton[nav="true"] {{ text-align: left; background: transparent; border: 1px solid transparent; padding: 10px 12px; }}
-    QPushButton[nav="true"]:hover {{ background: #1B2837; }}
-    QPushButton[nav="true"]:checked {{ background: #1B2D38; color: {accent}; border-color: #293545; }}
+    QPushButton[nav="true"]:hover {{ background: #23273C; }}
+    QPushButton[nav="true"]:checked {{ background: #292541; color: {accent}; border-color: #30334C; }}
     QPushButton[nav="true"]:focus {{ border-color: {accent}; }}
     QLineEdit, QPlainTextEdit, QTableView, QListView {{
-        background: #111B28; border: 1px solid #293545; border-radius: 8px;
-        selection-background-color: #254A53; selection-color: #ECF1FA;
+        background: #121526; border: 1px solid #30334C; border-radius: 8px;
+        selection-background-color: #514A83; selection-color: #F1F0FF;
     }}
     QLineEdit, QPlainTextEdit {{ padding: {density}; }}
     QPlainTextEdit#activityConsole {{ background: #0A1019; color: #C8D6E5; font-family: 'Cascadia Mono', 'Consolas'; padding: 12px; }}
-    QHeaderView::section {{ background: #1B2837; color: #BCC8D8; border: none; padding: 8px 6px; font-weight: 600; }}
-    QTableView {{ alternate-background-color: #151E2B; gridline-color: #293545; }}
+    QHeaderView::section {{ background: #23273C; color: #C1C2DD; border: none; padding: 8px 6px; font-weight: 600; }}
+    QTableView {{ alternate-background-color: #191C30; gridline-color: #30334C; }}
     QScrollArea {{ border: none; background: transparent; }}
-    QScrollBar:vertical {{ background: #111B28; width: 12px; margin: 0; }}
-    QScrollBar::handle:vertical {{ background: #40526A; min-height: 24px; border-radius: 5px; }}
+    QScrollBar:vertical {{ background: #121526; width: 12px; margin: 0; }}
+    QScrollBar::handle:vertical {{ background: #505576; min-height: 24px; border-radius: 5px; }}
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
-    QScrollBar:horizontal {{ background: #111B28; height: 12px; margin: 0; }}
-    QScrollBar::handle:horizontal {{ background: #40526A; min-width: 24px; border-radius: 5px; }}
+    QScrollBar:horizontal {{ background: #121526; height: 12px; margin: 0; }}
+    QScrollBar::handle:horizontal {{ background: #505576; min-width: 24px; border-radius: 5px; }}
     QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
-    QSplitter::handle {{ background: #293545; width: 3px; }}
-    QProgressBar {{ border: 1px solid #293545; border-radius: 5px; background: #1B2837; text-align: center; }}
+    QSplitter::handle {{ background: #30334C; width: 3px; }}
+    QProgressBar {{ border: 1px solid #30334C; border-radius: 5px; background: #23273C; text-align: center; }}
     QProgressBar::chunk {{ background: {accent}; border-radius: 4px; }}
-    QToolTip {{ background: #1B2837; color: #ECF1FA; border: 1px solid #293545; padding: 4px; }}
-    QMessageBox, QDialog, QMenu, QComboBox QAbstractItemView {{ background: #151E2B; }}
-    QFrame#toast {{ border-radius: 8px; border: 1px solid #293545; background: #151E2B; }}
+    QToolTip {{ background: #23273C; color: #F1F0FF; border: 1px solid #30334C; padding: 4px; }}
+    QMessageBox, QDialog, QMenu, QComboBox QAbstractItemView {{ background: #191C30; }}
+    QFrame#toast {{ border-radius: 8px; border: 1px solid #30334C; background: #191C30; }}
     QFrame#toast[level="success"] {{ border-color: #52D6AC; }}
     QFrame#toast[level="warning"] {{ border-color: #F5BC68; }}
     QFrame#toast[level="error"] {{ border-color: #F17878; }}
@@ -105,7 +111,7 @@ def button(text, action, primary=False, glyph=None):
     control = QPushButton(text)
     control.setProperty("primary", primary)
     if glyph:
-        control.setIcon(icon(glyph, "#0D141E" if primary else "#94A4BA"))
+        control.setIcon(icon(glyph, "#0C0D18" if primary else "#A2A8C4"))
     control.clicked.connect(action)
     return control
 
