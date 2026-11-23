@@ -1,6 +1,6 @@
-# CreatorStudios Sims 4 Suite 2.1.0 — Release Candidate
+# CreatorStudios Sims 4 Suite v2.1.0
 
-**Status:** Draft / QA required. Do not label this release as tested or published until the Windows workflow and application smoke tests pass.
+**Release:** Windows desktop application 2.1.0 and console downloader 1.1.0. Both editions are distributed in this combined GitHub Release.
 
 ## Two editions in one release
 
@@ -39,9 +39,9 @@
 
 The workflow `.github/workflows/suite-release.yml` runs a Python regression gate, repeats checks on Windows, builds the EXE using PyInstaller, creates a console ZIP, and generates SHA-256 checksums.
 
-Run the workflow manually to obtain test artifacts without publishing a release. After review and integration, pushing a new `suite-v2.1.0` tag triggers creation of a **draft** GitHub Release with both editions attached. A maintainer must review and publish the draft.
+Run the workflow manually to obtain test artifacts without publishing a release. After the tested integration is merged into `main`, the workflow builds both editions and publishes the combined release under `suite-v2.1.0` if no release with that tag already exists.
 
-## Required release QA
+## Release verification and follow-up QA
 
 - Launch the bundled EXE on a clean 64-bit Windows machine, without a developer Python install.
 - Validate Qt desktop import, login-independent navigation, Ctrl+K, catalog search (with approved credentials), and reviewed install workflow.
