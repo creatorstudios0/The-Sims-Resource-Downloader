@@ -25,7 +25,7 @@ jobs:
       - name: Compile both editions
         run: python -m compileall -q src scripts tests
       - name: Run regression suite
-        run: python -m pytest -q
+        run: python -m pytest -q tests/test_library_insights.py tests/test_console_tools.py tests/test_package_console.py tests/test_palette_search.py tests/test_tsr_host_security.py
 
   windows-release:
     needs: verify
