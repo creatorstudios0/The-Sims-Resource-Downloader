@@ -2,6 +2,7 @@ from __future__ import annotations
 from exceptions import InvalidURL
 from logger import logger
 import re, requests
+from urllib.parse import urlparse
 
 
 class TSRUrl:
@@ -25,10 +26,15 @@ class TSRUrl:
         return None if itemId is None else int(itemId[0])
 
     def __isValidUrl(self, url: str) -> bool:
-        isUrlValid = (
-            re.search(r"thesimsresource.com/", url) is not None
-            and self.__getItemId(url) is not None
-        )
+        # A substring check accepts lookalike hosts such as
+        # ``evilthesimsresource.com``.  Clipboard URLs are fetched later when
+        # checking VIP status, so only let the official TSR host through.
+        host = urlparse(url).hostname
+        isOfficialHost = host is not None and host.rstrip(".").lower() in {
+            "thesimsresource.com",
+            "www.thesimsresource.com",
+        }
+        isUrlValid = isOfficialHost and self.__getItemId(url) is not None
         logger.debug(f"Is url valid: {isUrlValid}")
         return isUrlValid
 
