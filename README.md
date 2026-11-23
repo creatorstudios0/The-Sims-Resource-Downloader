@@ -120,6 +120,7 @@ triggers draft release creation; a maintainer publishes the release after QA.
 ### Windows console commands
 
 ```bat
+Run Console.bat
 start.bat --console
 start.bat --doctor
 start.bat --audit
