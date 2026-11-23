@@ -97,7 +97,7 @@ def main(argv=None):
     try:
         config = read_config()
         game = (getattr(args, "game", None) or default_game()).expanduser()
-        print("\n CREATORSTUDIOS  /  SIMS 4 CONSOLE\n" + "─" * 49)
+        print("\n CREATORSTUDIOS  /  SIMS 4 CONSOLE\n" + "-" * 49)
         if args.command == "doctor":
             for name, value, okay in diagnostics(config, game):
                 print(f" {'OK' if okay else 'CHECK':5}  {name}: {value}")
