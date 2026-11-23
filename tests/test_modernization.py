@@ -16,6 +16,7 @@ from desktop_qt import MainWindow
 from desktop_data import parse_url
 from qt_services import LibraryService, scan_files
 from desktop_transfer import DesktopTSRDownload as TSRDownload
+from sims_install import MAX_ARCHIVE_FILE_BYTES, install_plan
 
 URL = "https://www.thesimsresource.com/downloads/123"
 
@@ -157,6 +158,30 @@ def test_real_disk_scan_install_toggle_and_history(app_state, qtbot, tmp_path):
     assert any(row["action"] == "Uninstall" for row in service.history_rows())
     assert sum(row["action"] == "Install" for row in service.history_rows()) == 1
     qtbot.waitUntil(lambda: not service.jobs)
+
+
+def test_install_preview_rejects_oversized_archive_member(tmp_path, monkeypatch):
+    source = tmp_path / "oversized.zip"
+    source.write_bytes(b"not opened by the mocked archive")
+    game = tmp_path / "The Sims 4"
+    game.mkdir()
+    member = zipfile.ZipInfo("oversized.package")
+    member.file_size = MAX_ARCHIVE_FILE_BYTES + 1
+
+    class Archive:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def infolist(self):
+            return [member]
+
+    monkeypatch.setattr("sims_install.zipfile.ZipFile", lambda _: Archive())
+
+    with pytest.raises(ValueError, match="too large"):
+        install_plan(source, game)
 
 
 def test_import_and_refresh_hides_deleted_files(app_state, qtbot, tmp_path, monkeypatch):
