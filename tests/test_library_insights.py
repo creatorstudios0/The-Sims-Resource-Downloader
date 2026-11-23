@@ -1,5 +1,7 @@
 """Read-only inventory regression tests with fake temporary game folders."""
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from tempfile import TemporaryDirectory
 import json
 import unittest
