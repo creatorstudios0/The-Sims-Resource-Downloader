@@ -4,6 +4,13 @@ cd /d "%~dp0"
 
 
 
+rem Console commands use a lightweight dependency set without Qt.
+set "REQUIREMENTS_FILE=requirements.txt"
+for %%A in (--console --doctor --audit --queue --settings --console-tools --help) do (
+    if /I "%~1"=="%%A" set "REQUIREMENTS_FILE=requirements-console.txt"
+)
+if /I "%~1"=="--help" goto :Usage
+
 rem ======================================================================
 rem  STEP 1: Verify Python is installed
 rem ======================================================================
@@ -34,7 +41,7 @@ if not exist "venv\Scripts\python.exe" (
     )
 
     echo [Setup 2/2] Installing required dependencies...
-    venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
+    venv\Scripts\python.exe -m pip install -r "%REQUIREMENTS_FILE%" --quiet
     if !errorlevel! neq 0 (
         echo [ERROR] Failed to install dependencies. Check your internet connection.
         pause
