@@ -46,8 +46,37 @@ if not exist "venv\Scripts\python.exe" (
     echo.
 )
 
+if /I "%~1"=="--doctor" goto :ConsoleTools
+if /I "%~1"=="--audit" goto :ConsoleTools
+if /I "%~1"=="--queue" goto :ConsoleTools
+if /I "%~1"=="--settings" goto :ConsoleTools
+if /I "%~1"=="--console-tools" goto :ConsoleTools
+if /I "%~1"=="--help" goto :Usage
 if /I "%~1"=="--console" goto :CheckConsoleUpdates
-if /I "%~1"=="--classic" goto :LaunchClassic
+if /I "%~1"=="--classic" goto :ConsoleTools
+set "TOOL=%~1"
+if /I "%TOOL%"=="--doctor" set "TOOL=doctor"
+if /I "%TOOL%"=="--audit" set "TOOL=audit"
+if /I "%TOOL%"=="--queue" set "TOOL=queue"
+if /I "%TOOL%"=="--settings" set "TOOL=settings"
+if /I "%TOOL%"=="--console-tools" set "TOOL=doctor"
+shift
+venv\Scripts\python.exe src\console_tools.py %TOOL% %*
+exit /b %errorlevel%
+
+:Usage
+echo CreatorStudios Sims 4 Suite
+echo   start.bat                 Open desktop application
+echo   start.bat --console       Run TSR clipboard downloader
+echo   start.bat --classic       Open legacy desktop application
+echo   start.bat --doctor        Diagnose local settings and folders
+echo   start.bat --audit         Inspect duplicate mods (read-only)
+echo   start.bat --queue         Show saved download queue
+echo   start.bat --settings      Show console preferences
+echo   start.bat --help          Show command reference
+exit /b 0
+
+:LaunchClassic
 venv\Scripts\python.exe -c "import PySide6.QtWidgets" >nul 2>&1
 if errorlevel 1 (
     venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -157,7 +186,7 @@ rem ======================================================================
 rem  STEP 4: Launch the downloader
 rem ======================================================================
 :LaunchApp
-echo Starting The Sims Resource Downloader...
+echo Starting CreatorStudios Sims 4 Console...
 echo.
 venv\Scripts\python.exe src\main.py
 echo.
