@@ -85,7 +85,7 @@ The private preview uses fictional listings and original generated artwork from 
 
 This project is based on the original **The Sims Resource Downloader** by Xientra and remains under the MIT License. See [NOTICE.md](./NOTICE.md) and [LICENSE](./LICENSE).
 
-## CreatorStudios desktop interface (proposed)
+## CreatorStudios desktop interface
 
 The Windows Qt desktop preview has a CreatorStudios visual refresh: a violet-accented
 workspace, a dashboard with direct library/discovery/scan actions, and a keyboard-driven
@@ -93,10 +93,7 @@ workspace, a dashboard with direct library/discovery/scan actions, and a keyboar
 command; Escape closes the dialog). Existing downloads, installs, profiles, backups,
 settings, and console operations use their previous implementations.
 
-This change is staged for review on a feature branch and does not alter the console
-edition. The desktop code is in the open Discover integration line; merging this UI
-branch into `main` should be coordinated with that integration rather than applied
-on top of the console-only default branch without review.
+The CreatorStudios interface retains the existing download, install, backup and console features.
 
 ### Verification on Windows
 
@@ -110,12 +107,12 @@ Smoke-test at 785px minimum width and at 1320px: sidebar collapse, Ctrl+K matchi
 Enter/Escape behavior, keyboard navigation, library selection and install preview,
 folder scans, backups and restores, and readability with custom accent colors.
 
-## CreatorStudios Sims 4 Suite 2.1.0 (release candidate)
+## CreatorStudios Sims 4 Suite 2.1.0
 
 **Desktop 2.1.0 + Console 1.1.0.** The release workflow packages a Windows desktop
-executable and separate portable console ZIP in the same draft GitHub Release. See
-[release notes](./RELEASE_NOTES_2.1.0.md). Only a reviewed `suite-v2.1.0` tag
-triggers draft release creation; a maintainer publishes the release after QA.
+executable and separate portable console ZIP in the same GitHub Release. See
+[release notes](./RELEASE_NOTES_2.1.0.md). The release workflow publishes after
+the default-branch build and test gates pass; manual QA remains recommended.
 
 ### Windows console commands
 
