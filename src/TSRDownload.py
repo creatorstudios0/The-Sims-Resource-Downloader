@@ -131,24 +131,39 @@ class TSRDownload:
         startingBytes = os.path.getsize(partPath) if os.path.exists(partPath) else 0
         logger.debug(f"Got startingBytes: {startingBytes}")
 
-        request = self.session.get(
+        with self.session.get(
             downloadUrl,
             stream=True,
             timeout=REQUEST_TIMEOUT,
             headers={"Range": f"bytes={startingBytes}-"},
-        )
-        logger.debug(f"Request status is: {request.status_code}")
-        request.raise_for_status()
+        ) as response:
+            logger.debug(f"Request status is: {response.status_code}")
+            response.raise_for_status()
 
-        # total includes any already-downloaded bytes from a partial file
-        total = int(request.headers.get("content-length", 0)) + startingBytes
-        downloaded = startingBytes
+            if response.status_code == 200:
+                # The server returned the entire file, so discard the stale prefix.
+                startingBytes = 0
+            elif response.status_code == 206:
+                contentRange = response.headers.get("Content-Range", "")
+                rangeMatch = re.fullmatch(
+                    r"bytes ([0-9]+)-[0-9]+/(?:[0-9]+|\*)", contentRange, re.IGNORECASE
+                )
+                if rangeMatch is None or int(rangeMatch[1]) != startingBytes:
+                    raise ValueError(
+                        f"Download returned unexpected Content-Range {contentRange!r} "
+                        f"for requested offset {startingBytes}"
+                    )
+            else:
+                raise ValueError(f"Unexpected download response status: {response.status_code}")
 
-        with open(partPath, "ab" if startingBytes > 0 else "wb") as file:
-            for chunk in request.iter_content(1024 * 128):
-                file.write(chunk)
-                downloaded += len(chunk)
-                _print_progress(fileName, downloaded, total)
+            total = int(response.headers.get("content-length", 0)) + startingBytes
+            downloaded = startingBytes
+
+            with open(partPath, "ab" if startingBytes > 0 else "wb") as file:
+                for chunk in response.iter_content(1024 * 128):
+                    file.write(chunk)
+                    downloaded += len(chunk)
+                    _print_progress(fileName, downloaded, total)
 
         # Final progress line — ensure 100% is shown, then move to a new line
         _print_progress(fileName, total if total > 0 else downloaded, total if total > 0 else downloaded)
