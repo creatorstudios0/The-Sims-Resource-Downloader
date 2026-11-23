@@ -49,7 +49,11 @@ def backup_content(game, mods_folder, target):
         raise FileExistsError("A backup already exists at that path. Choose a new filename.")
     configured = {"Mods": Path(mods_folder), "Tray": Path(game).resolve() / "Tray"}
     for folder in configured.values():
-        if folder.is_symlink() or getattr(folder, "is_junction", lambda: False)():
+        try:
+            info = folder.lstat()
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        if stat.S_ISLNK(info.st_mode) or folder_link(info):
             raise ValueError(f"The {folder.name} folder is a filesystem link. Select the real folder before backing up.")
     roots = {name: folder.resolve() for name, folder in configured.items()}
     if any(target.is_relative_to(root) for root in roots.values()):
