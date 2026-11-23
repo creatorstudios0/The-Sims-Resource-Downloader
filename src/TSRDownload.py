@@ -135,35 +135,50 @@ class TSRDownload:
             downloadUrl,
             stream=True,
             timeout=REQUEST_TIMEOUT,
-            headers={"Range": f"bytes={startingBytes}-"},
+            headers={"Range": f"bytes={startingBytes}-", "Accept-Encoding": "identity"},
         ) as response:
             logger.debug(f"Request status is: {response.status_code}")
             response.raise_for_status()
 
+            rangeEnd = None
+            contentEncoding = response.headers.get("Content-Encoding", "identity")
             if response.status_code == 200:
                 # The server returned the entire file, so discard the stale prefix.
                 startingBytes = 0
+                total = int(response.headers.get("content-length", 0)) if contentEncoding == "identity" else 0
             elif response.status_code == 206:
                 contentRange = response.headers.get("Content-Range", "")
                 rangeMatch = re.fullmatch(
-                    r"bytes ([0-9]+)-[0-9]+/(?:[0-9]+|\*)", contentRange, re.IGNORECASE
+                    r"bytes ([0-9]+)-([0-9]+)/([0-9]+)", contentRange, re.IGNORECASE
                 )
-                if rangeMatch is None or int(rangeMatch[1]) != startingBytes:
+                if (
+                    rangeMatch is None
+                    or int(rangeMatch[1]) != startingBytes
+                    or not startingBytes <= int(rangeMatch[2]) < int(rangeMatch[3])
+                    or contentEncoding != "identity"
+                ):
                     raise ValueError(
                         f"Download returned unexpected Content-Range {contentRange!r} "
                         f"for requested offset {startingBytes}"
                     )
+                rangeEnd = int(rangeMatch[2]) + 1
+                total = int(rangeMatch[3])
             else:
                 raise ValueError(f"Unexpected download response status: {response.status_code}")
 
-            total = int(response.headers.get("content-length", 0)) + startingBytes
             downloaded = startingBytes
 
             with open(partPath, "ab" if startingBytes > 0 else "wb") as file:
                 for chunk in response.iter_content(1024 * 128):
+                    if rangeEnd is not None and downloaded + len(chunk) > rangeEnd:
+                        file.truncate(startingBytes)
+                        raise ValueError("Download body exceeds Content-Range")
                     file.write(chunk)
                     downloaded += len(chunk)
                     _print_progress(fileName, downloaded, total)
+
+            if rangeEnd is not None and downloaded != total:
+                raise ValueError(f"Download is incomplete ({downloaded} of {total} bytes)")
 
         # Final progress line — ensure 100% is shown, then move to a new line
         _print_progress(fileName, total if total > 0 else downloaded, total if total > 0 else downloaded)

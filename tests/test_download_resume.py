@@ -68,3 +68,37 @@ class DownloadResumeTests(TestCase):
 
         self.assertEqual(self.part_path.read_bytes(), b"abc")
         self.assertEqual(list(self.download_path.iterdir()), [self.part_path])
+
+    def test_bounded_partial_response_saves_progress_without_finalizing(self):
+        self.mock_download_response(206, b"de", "bytes 3-4/6")
+
+        with self.assertRaisesRegex(ValueError, "Download is incomplete"):
+            self.downloader._attemptDownload(str(self.download_path))
+
+        self.assertEqual(self.part_path.read_bytes(), b"abcde")
+        self.assertEqual(list(self.download_path.iterdir()), [self.part_path])
+
+        get = self.mock_download_response(206, b"f", "bytes 5-5/6")
+        path = self.downloader._attemptDownload(str(self.download_path))
+
+        self.assertEqual(get.call_args.kwargs["headers"]["Range"], "bytes=5-")
+        self.assertEqual(Path(path).read_bytes(), b"abcdef")
+        self.assertFalse(self.part_path.exists())
+
+    def test_response_body_cannot_extend_beyond_advertised_range(self):
+        self.mock_download_response(206, b"defg", "bytes 3-5/6")
+
+        with self.assertRaisesRegex(ValueError, "exceeds Content-Range"):
+            self.downloader._attemptDownload(str(self.download_path))
+
+        self.assertEqual(self.part_path.read_bytes(), b"abc")
+        self.assertEqual(list(self.download_path.iterdir()), [self.part_path])
+
+    def test_partial_response_with_unknown_total_cannot_finalize(self):
+        self.mock_download_response(206, b"def", "bytes 3-5/*")
+
+        with self.assertRaisesRegex(ValueError, "unexpected Content-Range"):
+            self.downloader._attemptDownload(str(self.download_path))
+
+        self.assertEqual(self.part_path.read_bytes(), b"abc")
+        self.assertEqual(list(self.download_path.iterdir()), [self.part_path])
