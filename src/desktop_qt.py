@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import csv
 import logging
-import msvcrt
 import os
 import sys
 
@@ -1581,6 +1580,9 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    # Only the Windows entry point needs the native file lock; Linux CI imports
+    # the UI for offscreen regression tests without the msvcrt module.
+    import msvcrt
     arguments = sys.argv[1:]
     link = arguments[0] if len(arguments) == 1 else None
     app = QApplication([sys.argv[0]])
