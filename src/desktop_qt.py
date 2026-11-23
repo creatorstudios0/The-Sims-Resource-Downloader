@@ -413,6 +413,7 @@ class MainWindow(QMainWindow):
         self.profile_control.setCurrentIndex(0)
         self.search.setText(".ts4script")
         self.search.setFocus()
+        self.s.scan()
 
     def create_content_backup(self):
         folder = Path(self.s.settings["backup"])

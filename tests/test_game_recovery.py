@@ -85,8 +85,14 @@ def test_patch_day_keeps_warning_until_player_reviews(tmp_path, qtbot, monkeypat
     assert "changed from 1.114.46.1030 to 1.115.200.1030" in window.patch_summary.text()
     assert json.loads(service.path.read_text(encoding="utf-8"))["reviewedGameVersions"][str(game)] == "1.114.46.1030"
 
+    mods = game / "Mods"
+    mods.mkdir()
+    (mods / "gameplay.ts4script").write_bytes(b"script")
+    (mods / "outfit.package").write_bytes(b"package")
     window.review_script_mods()
     assert window.search.text() == ".ts4script"
+    qtbot.waitUntil(lambda: window.library_model.rowCount() == 1)
+    assert window.library_model.rows[0][1][0] == "gameplay.ts4script"
     window.patch_reviewed.click()
     assert not window.patch_reviewed.isEnabled()
     assert service.patch_versions() == ("1.115.200.1030", "1.115.200.1030")
