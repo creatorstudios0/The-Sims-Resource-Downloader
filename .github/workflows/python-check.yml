@@ -6,7 +6,7 @@ on:
 
 jobs:
   compile:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Check out repository
@@ -28,6 +28,6 @@ jobs:
 
       - name: Run regression suite
         env:
-          PYTHONPATH: src:scripts
+          PYTHONPATH: src;scripts
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest -q
