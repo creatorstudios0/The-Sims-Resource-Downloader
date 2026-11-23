@@ -109,3 +109,51 @@ venv\Scripts\python.exe -m pytest -q
 Smoke-test at 785px minimum width and at 1320px: sidebar collapse, Ctrl+K matching,
 Enter/Escape behavior, keyboard navigation, library selection and install preview,
 folder scans, backups and restores, and readability with custom accent colors.
+
+## CreatorStudios Sims 4 Suite 2.1.0 (release candidate)
+
+**Desktop 2.1.0 + Console 1.1.0.** The release workflow packages a Windows desktop
+executable and separate portable console ZIP in the same draft GitHub Release. See
+[release notes](./RELEASE_NOTES_2.1.0.md). Only a reviewed `suite-v2.1.0` tag
+triggers draft release creation; a maintainer publishes the release after QA.
+
+### Windows console commands
+
+```bat
+start.bat --console
+start.bat --doctor
+start.bat --audit
+start.bat --audit --output "C:\\Users\\Public\\CreatorStudios-Audit.json"
+start.bat --queue --all
+start.bat --settings
+```
+
+The **audit** is read-only: it counts installed .package, .ts4script and Tray files,
+including .disabled mods, flags exact byte-identical groups, and can export JSON or
+CSV. Duplicate results are advisory; the program never deletes duplicates. Folder
+scanning skips links and limits the number of indexed files.
+
+### Desktop audit
+
+Use **Dashboard → Export mod audit** or **Settings → Library management → Export
+audit report** to save a report. The work runs outside the UI thread. Press
+**Ctrl+K** to open CreatorStudios Quick Switch.
+
+### Developer checks
+
+```powershell
+python -m pip install -r requirements.txt pytest pytest-qt
+$env:PYTHONPATH="src;scripts"
+$env:QT_QPA_PLATFORM="offscreen"
+python -m compileall src scripts tests
+python -m pytest -q
+python scripts/package_console.py
+```
+
+On Windows, prepare the venv, install PyInstaller and run
+`powershell -ExecutionPolicy Bypass -File .\\build-desktop.ps1`.
+
+**Upgrade warning:** Install a fresh console ZIP alongside your old installation,
+or manually transfer your original `src/config.json`, session, queue and Downloads
+folder after backing them up. The launcher no longer overwrites configuration by
+automatically applying source ZIP updates.
