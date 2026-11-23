@@ -1,4 +1,4 @@
-# The Sims Resource Downloader - Infinity Build `v0.5.2-production`
+# The Sims Resource Downloader - Infinity Build `v1.0.3`
 
 [![License: MIT](https://img.shields.io/github/license/Xientraa/The-Sims-Resource-Downloader?label=License&style=for-the-badge)](./LICENSE)
 

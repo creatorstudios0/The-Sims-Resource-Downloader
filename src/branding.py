@@ -7,7 +7,7 @@ ORIGINAL_AUTHOR = "Xientra"
 BUILD_CREDIT = "Production build maintained by Infinity"
 
 _VERSION_FILE = os.path.join(PROJECT_DIR, ".version")
-_FALLBACK_VERSION = "v1.0.2"
+_FALLBACK_VERSION = "v1.0.3"
 
 
 def getAppVersion() -> str:

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [v1.0.3]
+
+### Fixed
+- Prevented corrupted files when a server returned a full response during a download resume.
+- Reject partial responses that do not start at the requested byte offset.
+
+---
+
 ## [v1.0.2] — 2026-08-05
 
 ### Added
