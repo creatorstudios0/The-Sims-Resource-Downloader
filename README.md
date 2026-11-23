@@ -63,6 +63,49 @@ In a fresh v1.0.3 installation, copy `src/config.defaults.json` to `src/config.j
 - CI runs `python -m compileall src` on push and pull request.
 - See [GITHUB_UPLOAD.md](./GITHUB_UPLOAD.md) for the exact upload checklist.
 
+## Sims 4 Mod Library for Windows
+
+Run `start.bat` to open the desktop app, `start.bat --console` for the clipboard downloader, or `start.bat --classic` for the original desktop interface. In the app, set the Sims 4 user data folder under **Settings**. **Import files** installs supported ZIPs and loose content into Mods or Tray. **Refresh Library** reconciles files that were deleted outside the app. **Profile backups** recover app records. **Console** shows recent activity.
+
+To use browser handoffs, build and run the packaged app, then select **Enable website links** in Settings. Enter an approved CurseForge API key in **Discover** or launch with `CURSEFORGE_API_KEY` set. Clicking **Open in Mod Library** reviews the requested file, downloads it after confirmation, and shows a file-by-file install preview. Close the preview to leave the downloaded file available without installing it.
+
+```powershell
+venv\Scripts\python.exe -m pip install PyInstaller pytest pytest-qt
+powershell -ExecutionPolicy Bypass -File .\build-desktop.ps1
+venv\Scripts\python.exe -m pytest -q
+```
+
+## Discover website
+
+From the `website` directory, run `node build.mjs` and `node dev.mjs`. The local preview uses sample data and is available at `http://127.0.0.1:8766`. Use `node --test catalog.test.mjs` after building to verify the catalog.
+
+The private preview uses fictional listings and original generated artwork from a six-panel brief featuring a cottage, hairstyle, kitchen, outfit, family, and study. Set the approved `CURSEFORGE_API_KEY` on the server to enable live Sims 4 search. That key is read only by the Worker. Source sites handle files that are unavailable for third-party downloads. The site links to The Sims Resource and does not host its content.
+
 ## Attribution
 
 This project is based on the original **The Sims Resource Downloader** by Xientra and remains under the MIT License. See [NOTICE.md](./NOTICE.md) and [LICENSE](./LICENSE).
+
+## CreatorStudios desktop interface (proposed)
+
+The Windows Qt desktop preview has a CreatorStudios visual refresh: a violet-accented
+workspace, a dashboard with direct library/discovery/scan actions, and a keyboard-driven
+**Quick Switch**. Press **Ctrl+K** to search pages and actions (Enter runs the selected
+command; Escape closes the dialog). Existing downloads, installs, profiles, backups,
+settings, and console operations use their previous implementations.
+
+This change is staged for review on a feature branch and does not alter the console
+edition. The desktop code is in the open Discover integration line; merging this UI
+branch into `main` should be coordinated with that integration rather than applied
+on top of the console-only default branch without review.
+
+### Verification on Windows
+
+```powershell
+venv\Scripts\python.exe -m compileall src
+venv\Scripts\python.exe -m unittest discover -s tests -p test_palette_search.py -v
+venv\Scripts\python.exe -m pytest -q
+```
+
+Smoke-test at 785px minimum width and at 1320px: sidebar collapse, Ctrl+K matching,
+Enter/Escape behavior, keyboard navigation, library selection and install preview,
+folder scans, backups and restores, and readability with custom accent colors.
