@@ -184,11 +184,26 @@ def failure_message(error):
 
 
 def rename_managed(record):
-    current = verify_record(record)
+    """Quarantine a managed file safely, retrying transient Windows sharing locks.
+
+    An in-flight read-only inventory scan may have a temporary read handle open.
+    Do not replace a destination that appeared while waiting for that handle.
+    """
+    from time import sleep
+
     original = Path(record["path"])
     target = original if record["disabled"] else original.with_name(original.name + ".disabled")
-    current.rename(target)
-    return str(target)
+    for attempt in range(10):
+        try:
+            current = verify_record(record)
+            if os.path.lexists(target):
+                raise FileExistsError(f"Target already exists: {target}")
+            current.rename(target)
+            return str(target)
+        except PermissionError:
+            if attempt == 9:
+                raise
+            sleep(0.12)
 
 
 def remove_managed(records, backup=None):
