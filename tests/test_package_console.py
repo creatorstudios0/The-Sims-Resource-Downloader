@@ -18,6 +18,8 @@ class PackageTests(unittest.TestCase):
                 paths = package.namelist()
                 prefix = f"CreatorStudios-Sims4-Console-{CONSOLE_VERSION}/"
                 self.assertIn(prefix + "start.bat", paths)
+                self.assertIn(prefix + "Run Console.bat", paths)
+                self.assertIn(prefix + "requirements-console.txt", paths)
                 self.assertIn(prefix + "src/main.py", paths)
                 self.assertIn(prefix + "src/console_tools.py", paths)
                 self.assertIn(prefix + "src/library_insights.py", paths)
