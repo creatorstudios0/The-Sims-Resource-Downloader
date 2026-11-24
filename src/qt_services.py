@@ -740,6 +740,8 @@ class LibraryService(QObject):
         self.scan()
 
     def toggle_scanned(self, key):
+        if self.mutating_files():
+            raise ValueError("Wait for active file operations to finish before changing this file.")
         record = self.disk[key]
         original = Path(record["path"])
         mods = Path(self.mods()).resolve()

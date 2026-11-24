@@ -1264,18 +1264,27 @@ class MainWindow(QMainWindow):
             self.s.install_selected(key, plan)
 
     def toggle_library(self):
-        record = self.current_mod()
+        keys = self.library_keys()
+        if len(keys) != 1:
+            return
+        key = keys[0]
+        record = self.library_entries.get(key)
         if not record:
             return
         verb = "Restore" if record.get("disabled") else "Quarantine"
-        if not self.confirm(f"{verb} mod", f"{verb} {Path(record['path']).name}? Close the game before changing its files."):
+        if (not self.confirm(f"{verb} mod", f"{verb} {Path(record['path']).name}? Close the game before changing its files.")
+                or self.closing):
+            return
+        current = self.library_entries.get(key, {})
+        if current.get("path") != record["path"]:
+            self.inform("The file changed while confirmation was open. Select it and try again.", "warning")
             return
         try:
             if record["origin"] == "managed":
                 self.s.toggle_managed(record["batch"], record["index"])
                 return
             elif record["origin"] == "scan":
-                self.s.toggle_scanned(self.library_keys()[0])
+                self.s.toggle_scanned(key)
             self.inform(f"{verb} completed.", "success")
         except (OSError, ValueError) as error:
             self.inform(failure_message(error), "error")
