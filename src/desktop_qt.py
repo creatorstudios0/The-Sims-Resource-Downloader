@@ -1188,7 +1188,8 @@ class MainWindow(QMainWindow):
         ):
             try:
                 self.s.restore_backup(snapshots[selected(view)[0]])
-                self.profile = None
+                self.profile_control.setCurrentIndex(0)
+                self.collection_control.setCurrentIndex(0)
                 self.view_switch.setCurrentText(self.s.state.get("libraryView", "List"))
                 self.refresh_library()
                 self.sync_settings()
