@@ -26,7 +26,7 @@ from profile_backups import ProfileBackups, read_state
 from sims_install import digest, install, install_all, install_plan, installed_path, verify_record, TRAY_EXTENSIONS
 from windows_folders import app_data, default_downloads, detect_game
 
-VERSION = "2.1.0"
+VERSION = "2.1.1"
 RELEASES = "https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases"
 FROZEN = getattr(sys, "frozen", False)
 DATA_DIR = app_data() if FROZEN else Path(PROJECT_DIR)
