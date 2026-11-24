@@ -229,6 +229,34 @@ def test_console_shows_background_activity(app_state, qtbot, caplog):
         qtbot.waitUntil(lambda: "Library refreshed" in window.console.toPlainText())
 
 
+
+def test_discover_can_retry_failed_page_without_losing_results(app_state, qtbot, monkeypatch):
+    _, window = app_state
+    page = window.discover
+    failed_next = False
+
+    def search(key, query, index):
+        nonlocal failed_next
+        assert (key, query) == ("test-key", "dress")
+        if index == curseforge.PAGE_SIZE and not failed_next:
+            failed_next = True
+            raise ValueError("Temporary catalog error")
+        return [{"id": index + 1, "name": f"Dress {index + 1}"}], curseforge.PAGE_SIZE + 1
+
+    monkeypatch.setattr(curseforge, "search", search)
+    page.api_key.setText("test-key")
+    page.search_box.setText("dress")
+    page.search()
+    qtbot.waitUntil(page.next.isEnabled)
+    page.next.click()
+    qtbot.waitUntil(lambda: "Temporary catalog error" in page.status.text())
+    assert page.model.rows[0][1][0] == "Dress 1"
+    assert page.next.isEnabled()
+    page.next.click()
+    qtbot.waitUntil(page.previous.isEnabled)
+    assert page.model.rows[0][1][0] == f"Dress {curseforge.PAGE_SIZE + 1}"
+
+
 def test_tsr_discover_downloads_and_installs(app_state, qtbot, tmp_path, monkeypatch):
     service, window = app_state
     service.state["game"] = str(tmp_path)

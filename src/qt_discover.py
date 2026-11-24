@@ -57,8 +57,8 @@ class DiscoverPage(QWidget):
         self.summary.setTextFormat(Qt.TextFormat.PlainText)
         self.summary.setMaximumHeight(56)
         controls.addWidget(self.summary)
-        self.previous = button("Previous", lambda: self.load(self.index - curseforge.PAGE_SIZE))
-        self.next = button("Next", lambda: self.load(self.index + curseforge.PAGE_SIZE))
+        self.previous = button("Previous", lambda: self.load(self.index - curseforge.PAGE_SIZE, paging=True))
+        self.next = button("Next", lambda: self.load(self.index + curseforge.PAGE_SIZE, paging=True))
         self.view_project = button("Open project", self.open_project, glyph="link")
         self.install_button = button("Install", self.install_curseforge, True, "queue")
         controls.addLayout(row(self.previous, self.next, None, self.view_project, self.install_button))
@@ -95,17 +95,19 @@ class DiscoverPage(QWidget):
         self.query = self.search_box.text().strip()
         self.load(0)
 
-    def load(self, index):
+    def load(self, index, *, paging=False):
         self.requested_index = index
+        self.paging = paging
         self.status.setText("Searching CurseForge…")
         self.service.job("curseforge-search", curseforge.search, self.service.curseforge_key, self.query, index)
         self.set_busy(True)
 
     def result(self, value, error):
         if error:
-            self.projects.clear()
-            self.index = self.total = 0
-            update_rows(self.results, self.model, [])
+            if not self.paging:
+                self.projects.clear()
+                self.index = self.total = 0
+                update_rows(self.results, self.model, [])
             self.status.setText(error)
         else:
             projects, self.total = value
