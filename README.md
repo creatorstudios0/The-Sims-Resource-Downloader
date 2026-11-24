@@ -8,14 +8,14 @@ Download and organize The Sims 4 custom content on Windows. Choose the desktop l
 
 | Edition | Get it | What it does |
 | --- | --- | --- |
-| **CreatorStudios Sims 4 Mod Library 2.1.0** | [Download Windows EXE](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/download/suite-v2.1.0/CreatorStudios.Sims.4.Mod.Library.2.1.0.exe) | Browse The Sims Resource and CurseForge, queue downloads, review installs, scan your library, and back up profiles. |
-| **CreatorStudios Sims 4 Console 1.1.0** | [Download Console ZIP](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/download/suite-v2.1.0/CreatorStudios-Sims4-Console-1.1.0.zip) | Watch the clipboard for The Sims Resource links and download and sort files automatically. |
+| **CreatorStudios Sims 4 Mod Library 2.1.1** | [Download Windows EXE](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/download/suite-v2.1.1/CreatorStudios.Sims.4.Mod.Library.2.1.1.exe) | Browse The Sims Resource and CurseForge, queue downloads, review installs, scan your library, and back up profiles. |
+| **CreatorStudios Sims 4 Console 1.1.0** | [Download Console ZIP](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/download/suite-v2.1.1/CreatorStudios-Sims4-Console-1.1.0.zip) | Watch the clipboard for The Sims Resource links and download and sort files automatically. |
 
-Release notes and SHA-256 checksums are available on the [Suite 2.1.0 release page](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/tag/suite-v2.1.0).
+Release notes and SHA-256 checksums are available on the [Suite 2.1.1 release page](https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases/tag/suite-v2.1.1).
 
 ### Windows desktop app
 
-Download and run `CreatorStudios.Sims.4.Mod.Library.2.1.0.exe` on 64-bit Windows. The unsigned executable includes its Python and Qt runtime.
+Download and run `CreatorStudios.Sims.4.Mod.Library.2.1.1.exe` on 64-bit Windows. The unsigned executable includes its Python and Qt runtime.
 
 ### Console downloader
 
@@ -95,13 +95,16 @@ This project is based on the original **The Sims Resource Downloader** by Xientr
 
 ## CreatorStudios desktop interface
 
-The Windows Qt desktop preview has a CreatorStudios visual refresh: a violet-accented
-workspace, a dashboard with direct library/discovery/scan actions, and a keyboard-driven
-**Quick Switch**. Press **Ctrl+K** to search pages and actions (Enter runs the selected
-command; Escape closes the dialog). Existing downloads, installs, profiles, backups,
-settings, and console operations use their previous implementations.
+The Windows desktop dashboard shows installed mods, queued downloads, completed
+installs, and library storage at a glance. It also brings quick actions, library
+health, Patch Day Checkup, Mods and Tray backups, and recent installs together.
 
-The CreatorStudios interface retains the existing download, install, backup and console features.
+Settings and the Download Queue clipboard watcher use animated on/off switches.
+Use Space to change a focused switch. You can turn animations off in Settings
+under Appearance.
+
+Press **Ctrl+K** to open **Quick Switch** and search pages or actions. Press Enter
+to run the selected command or Escape to close the dialog.
 
 ### Verification on Windows
 
@@ -115,11 +118,11 @@ Smoke-test at 785px minimum width and at 1320px: sidebar collapse, Ctrl+K matchi
 Enter/Escape behavior, keyboard navigation, library selection and install preview,
 folder scans, backups and restores, and readability with custom accent colors.
 
-## CreatorStudios Sims 4 Suite 2.1.0
+## CreatorStudios Sims 4 Suite 2.1.1
 
-**Desktop 2.1.0 + Console 1.1.0.** The release workflow packages a Windows desktop
+**Desktop 2.1.1 + Console 1.1.0.** The release workflow packages a Windows desktop
 executable and separate portable console ZIP in the same GitHub Release. See
-[release notes](./RELEASE_NOTES_2.1.0.md). The release workflow publishes after
+[release notes](./RELEASE_NOTES_2.1.1.md). The release workflow publishes after
 the default-branch build and test gates pass; manual QA remains recommended.
 
 ### Windows console commands

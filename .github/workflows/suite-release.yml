@@ -11,7 +11,7 @@ on:
 
 # Only one release job may publish this version at a time.
 concurrency:
-  group: creatorstudios-suite-2-1-release
+  group: creatorstudios-suite-2-1-1-release
   cancel-in-progress: false
 
 permissions:
@@ -95,17 +95,17 @@ jobs:
           name: CreatorStudios-Sims4-Suite-Windows
           path: dist/*
           if-no-files-found: error
-      - name: Publish CreatorStudios Sims 4 Suite 2.1.0
+      - name: Publish CreatorStudios Sims 4 Suite 2.1.1
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $tag = "suite-v2.1.0"
+          $tag = "suite-v2.1.1"
           $existing = gh release view $tag --json tagName 2>$null
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Release $tag already exists; no duplicate publication."
             exit 0
           }
-          gh release create $tag --target "${{ github.sha }}" --title "CreatorStudios Sims 4 Suite v2.1.0" --notes-file RELEASE_NOTES_2.1.0.md --latest dist/*
+          gh release create $tag --target "${{ github.sha }}" --title "CreatorStudios Sims 4 Suite v2.1.1" --notes-file RELEASE_NOTES_2.1.1.md --latest dist/*
           if ($LASTEXITCODE -ne 0) { throw "GitHub release publication failed." }
