@@ -15,6 +15,19 @@ def read_state(path):
         )
     ):
         raise ValueError("The library state file has an invalid structure.")
+
+    # Recovery metadata can be rebuilt without rolling back library records.
+    if not isinstance(value.get("reviewedGameVersions"), dict):
+        value.pop("reviewedGameVersions", None)
+    receipt = value.get("lastContentBackup")
+    if not (
+        isinstance(receipt, dict)
+        and isinstance(receipt.get("path"), str)
+        and receipt["path"]
+        and type(receipt.get("files")) is int
+        and receipt["files"] >= 0
+    ):
+        value.pop("lastContentBackup", None)
     return value
 
 

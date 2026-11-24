@@ -9,6 +9,29 @@ from desktop_qt import MainWindow
 from game_recovery import backup_content, game_version
 
 
+@pytest.mark.parametrize(("key", "value"), [
+    ("reviewedGameVersions", None),
+    ("lastContentBackup", ["backup.zip"]),
+    ("lastContentBackup", {"path": "backup.zip"}),
+])
+def test_desktop_loads_library_with_invalid_recovery_metadata(tmp_path, qtbot, monkeypatch, key, value):
+    monkeypatch.setattr(qt_services, "detect_game", lambda: None)
+    state_path = tmp_path / "state.json"
+    state_path.write_text(json.dumps({
+        "legacyImported": True, "profiles": {"Favorites": ["123"]}, key: value,
+    }), encoding="utf-8")
+
+    service = qt_services.LibraryService(state_path)
+    try:
+        window = MainWindow(service)
+        qtbot.addWidget(window)
+        assert service.profiles == {"Favorites": ["123"]}
+        assert key not in service.state
+        assert key not in json.loads(state_path.read_text(encoding="utf-8"))
+    finally:
+        service.shutdown()
+
+
 def test_backup_preserves_subfolders_and_quarantined_files(tmp_path):
     game = tmp_path / "game"
     mods = tmp_path / "custom mods"
