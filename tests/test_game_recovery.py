@@ -88,11 +88,14 @@ def test_patch_day_keeps_warning_until_player_reviews(tmp_path, qtbot, monkeypat
     mods = game / "Mods"
     mods.mkdir()
     (mods / "gameplay.ts4script").write_bytes(b"script")
-    (mods / "outfit.package").write_bytes(b"package")
+    (mods / "outfit.ts4script.package").write_bytes(b"package")
+    (mods / "disabled.ts4script.disabled").write_bytes(b"script")
     window.review_script_mods()
     assert window.search.text() == ".ts4script"
-    qtbot.waitUntil(lambda: window.library_model.rowCount() == 1)
-    assert window.library_model.rows[0][1][0] == "gameplay.ts4script"
+    qtbot.waitUntil(lambda: "scan" not in service.jobs)
+    assert [row[1][0] for row in window.library_model.rows] == [
+        "disabled.ts4script", "gameplay.ts4script",
+    ]
     window.patch_reviewed.click()
     assert not window.patch_reviewed.isEnabled()
     assert service.patch_versions() == ("1.115.200.1030", "1.115.200.1030")

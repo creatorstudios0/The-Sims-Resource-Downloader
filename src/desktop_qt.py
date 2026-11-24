@@ -850,9 +850,14 @@ class MainWindow(QMainWindow):
                 continue
             if category not in ("All categories", record.get("category", "Other")):
                 continue
-            if query and query not in " ".join(str(record.get(field, "")) for field in ("name", "creator", "category", "path", "url")).casefold():
+            path = Path(record["path"])
+            filetype = (path.with_suffix("") if record.get("disabled") else path).suffix.lower()
+            if query == ".ts4script":
+                if filetype != query:
+                    continue
+            elif query and query not in " ".join(str(record.get(field, "")) for field in ("name", "creator", "category", "path", "url")).casefold():
                 continue
-            result.append((key, record))
+            result.append((key, record, filetype.lstrip(".")))
         sort_index = self.sort_order.currentIndex()
         if sort_index == 1:
             result.sort(key=lambda pair: pair[1].get("added") or pair[1].get("date", ""), reverse=True)
@@ -861,13 +866,11 @@ class MainWindow(QMainWindow):
         else:
             result.sort(key=lambda pair: pair[1]["name"].casefold())
         rows = []
-        for key, record in result:
-            path = Path(record["path"])
+        for key, record, filetype in result:
             if record["origin"] == "library":
                 status = "Installed copy exists" if key in managed_items else "Downloaded"
             else:
                 status = "Disabled" if record.get("disabled") else "Enabled"
-            filetype = (path.with_suffix("") if record.get("disabled") else path).suffix.lower().lstrip(".")
             tag = record.get("category", "Other") + (" (inferred)" if record.get("inferred") else "")
             rows.append((key, (record["name"], tag, filetype or "—", size_label(record.get("size")), status)))
         update_rows(self.library_list, self.library_model, rows)
