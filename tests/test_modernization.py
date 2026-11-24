@@ -518,3 +518,57 @@ def test_activity_filters_and_popup_preference(app_state):
     window.toast("warning", "A dependency needs attention")
     assert window.notifications.entries[0][2] == "A dependency needs attention"
     assert not window.toast_frame.isVisible()
+
+
+
+def test_scanned_mod_keeps_saved_memberships_when_toggled(app_state, qtbot, tmp_path):
+    service, window = app_state
+    service.state["game"] = str(tmp_path)
+    mods = tmp_path / "Mods"
+    mods.mkdir()
+    mod = mods / "A.package"
+    mod.write_bytes(b"family")
+    disabled = mod.with_suffix(".package.disabled")
+
+    service.scan()
+    qtbot.waitUntil(lambda: not service.jobs)
+    original_key = next(iter(service.disk))
+    service.profiles["Gameplay"] = [original_key]
+    service.collections["Family"] = [original_key]
+    service.publish()
+    window.profile_control.setCurrentText("Gameplay")
+    window.collection_control.setCurrentText("Family")
+
+    for expected_path in (disabled, mod):
+        service.toggle_scanned(next(iter(service.disk)))
+        qtbot.waitUntil(lambda: not service.jobs)
+        assert expected_path.is_file()
+        assert window.library_model.rowCount() == 1
+        key = next(iter(service.disk))
+        saved = json.loads(service.path.read_text(encoding="utf-8"))
+        assert saved["profiles"]["Gameplay"] == [key]
+        assert saved["collections"]["Family"] == [key]
+
+
+@pytest.mark.parametrize("kind", ["profile", "collection"])
+def test_can_add_selection_to_another_group_while_filtering(app_state, qtbot, tmp_path, monkeypatch, kind):
+    service, window = app_state
+    service.state["game"] = str(tmp_path)
+    mods = tmp_path / "Mods"
+    mods.mkdir()
+    (mods / "A.package").write_bytes(b"family")
+    service.scan()
+    qtbot.waitUntil(lambda: not service.jobs)
+    key = next(iter(service.disk))
+    groups = window.group_records(kind)
+    groups.update({"Source": [key], "Destination": []})
+    service.publish()
+    window.go(2)
+    getattr(window, f"{kind}_control").setCurrentText("Source")
+    window.library_list.selectRow(0)
+    monkeypatch.setattr("desktop_qt.QInputDialog.getItem", lambda *args, **kwargs: ("Destination", True))
+
+    window.edit_group(kind, "add")
+
+    assert groups["Destination"] == [key]
+    assert getattr(window, kind) == "Source"
