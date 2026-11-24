@@ -53,6 +53,16 @@ def test_navigation_resize_and_state(app_state, qtbot):
     assert Path(data["settings"]["downloads"]).is_dir()
 
 
+def test_dashboard_reflows_without_horizontal_scrolling(app_state, qtbot):
+    _, window = app_state
+    dashboard = window.pages.widget(0)
+
+    for width in (785, 1020, 1320, 785):
+        window.resize(width, 650)
+        qtbot.waitUntil(lambda: dashboard.horizontalScrollBar().maximum() == 0)
+        assert dashboard.widget().width() == dashboard.viewport().width()
+
+
 def test_desktop_switches_keep_preferences_in_sync(app_state, qtbot, monkeypatch):
     service, window = app_state
     monkeypatch.delenv("QT_REDUCED_MOTION", raising=False)
