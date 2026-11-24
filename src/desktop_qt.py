@@ -11,7 +11,7 @@ from PySide6.QtGui import QIcon, QImageReader, QPixmap, QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog,
     QFrame, QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QInputDialog, QLineEdit, QListWidget,
-    QListView, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QSpinBox, QSplitter,
+    QListView, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QScrollArea, QSpinBox, QSplitter,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -65,6 +65,52 @@ def page_layout():
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(10)
     return widget, layout
+
+
+class DashboardScrollArea(QScrollArea):
+    def __init__(self, page):
+        super().__init__()
+        self.grids = []
+        self.setWidgetResizable(True)
+        self.viewport().setObjectName("scrollViewport")
+        self.setWidget(page)
+
+    def add_grid(self, parent, widgets, narrow_columns, spacing):
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(spacing)
+        parent.addLayout(grid)
+        self.grids.append((parent, grid, widgets, narrow_columns))
+        self.reflow()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.reflow()
+
+    def reflow(self):
+        # Reserve scrollbar space so a change in content height does not flip the layout again.
+        available = self.maximumViewportSize().width() - self.verticalScrollBar().sizeHint().width()
+        page_layout = self.widget().layout()
+        for parent, grid, widgets, narrow_columns in self.grids:
+            margins = page_layout.contentsMargins()
+            inset = margins.left() + margins.right()
+            if parent is not page_layout:
+                margins = parent.contentsMargins()
+                frame = parent.parentWidget()
+                inset += margins.left() + margins.right() + 2 * frame.frameWidth()
+            wide_columns = len(widgets)
+            wide_width = sum(max(widget.minimumSizeHint().width(), widget.minimumWidth()) for widget in widgets)
+            wide_width += (wide_columns - 1) * grid.horizontalSpacing()
+            columns = wide_columns if wide_width <= available - inset else narrow_columns
+
+            for index, widget in enumerate(widgets):
+                row_index, column = divmod(index, columns)
+                current = grid.indexOf(widget)
+                if current < 0 or grid.getItemPosition(current)[:2] != (row_index, column):
+                    grid.addWidget(widget, row_index, column)
+            for column in range(wide_columns):
+                stretch = int(column < columns)
+                if grid.columnStretch(column) != stretch:
+                    grid.setColumnStretch(column, stretch)
 
 
 class ConsoleHandler(logging.Handler):
@@ -306,6 +352,7 @@ class MainWindow(QMainWindow):
         accent = self.s.settings["accent"]
         QApplication.instance().setStyleSheet(theme(accent, compact))
         animate = self.s.settings["animations"] and not os.environ.get("QT_REDUCED_MOTION")
+        self.pages.widget(0).reflow()
         for control in self.findChildren(ToggleSwitch):
             control.set_appearance(accent, animate)
         for view in (self.queue_view, self.library_list, self.history_view, self.recent, self.discover.results):
@@ -349,15 +396,15 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 4, 4)
         layout.setSpacing(14)
 
-        metrics = QGridLayout()
-        metrics.setHorizontalSpacing(10)
+        dashboard = DashboardScrollArea(page)
+        metrics = []
         self.stats = []
-        for column, (name, detail, glyph) in enumerate((
+        for name, detail, glyph in (
             ("Installed mods", "Package and script files", "library"),
             ("Download queue", "Waiting and active items", "queue"),
             ("Completed installs", "Successful install batches", "history"),
             ("Library storage", "Installed content on disk", "folder"),
-        )):
+        ):
             card, contents = surface("stat")
             contents.setSpacing(5)
             badge = label("", "metricIcon")
@@ -370,34 +417,28 @@ class MainWindow(QMainWindow):
             contents.addWidget(value)
             contents.addWidget(label(detail, "secondary", True))
             contents.addStretch()
-            metrics.addWidget(card, 0, column)
-            metrics.setColumnStretch(column, 1)
+            metrics.append(card)
             self.stats.append(value)
-        layout.addLayout(metrics)
+        dashboard.add_grid(layout, metrics, narrow_columns=2, spacing=10)
 
         quick, controls = surface("dashboardActions")
-        controls.addLayout(row(
-            label("Quick actions", "section"), None,
+        layout.addWidget(quick)
+        dashboard.add_grid(controls, (
+            label("Quick actions", "section"),
             button("Discover content", lambda: self.go(4), True, "search"),
             button("Import files", self.add_files, glyph="plus"),
             button("View library", lambda: self.go(2), glyph="library"),
-        ))
-        layout.addWidget(quick)
+        ), narrow_columns=2, spacing=8)
 
         health, contents = surface()
-        contents.addLayout(row(
-            label("Library health", "section"), None,
+        layout.addWidget(health)
+        dashboard.add_grid(contents, (
+            label("Library health", "section"),
             button("Scan library", self.s.scan, glyph="refresh"),
             button("Export mod audit", self.export_audit, glyph="folder"),
-        ))
+        ), narrow_columns=2, spacing=8)
         self.diagnostics = label("", "secondary", True)
         contents.addWidget(self.diagnostics)
-        layout.addWidget(health)
-
-        maintenance = QGridLayout()
-        maintenance.setHorizontalSpacing(12)
-        maintenance.setColumnStretch(0, 1)
-        maintenance.setColumnStretch(1, 1)
 
         patch, controls = surface()
         controls.addWidget(label("Patch Day Checkup", "section"))
@@ -413,7 +454,6 @@ class MainWindow(QMainWindow):
         patch_actions.addWidget(self.patch_reviewed, 1, 0)
         patch_actions.addWidget(button("EA patch guide", lambda: QDesktopServices.openUrl(QUrl(advice))), 1, 1)
         controls.addLayout(patch_actions)
-        maintenance.addWidget(patch, 0, 0)
 
         backup, controls = surface()
         controls.addWidget(label("Mods and Tray backups", "section"))
@@ -425,22 +465,21 @@ class MainWindow(QMainWindow):
         self.backup_open = button("Open last backup", self.open_content_backup, glyph="folder")
         controls.addWidget(self.backup_create, alignment=Qt.AlignmentFlag.AlignLeft)
         controls.addWidget(self.backup_open, alignment=Qt.AlignmentFlag.AlignLeft)
-        maintenance.addWidget(backup, 0, 1)
-        layout.addLayout(maintenance)
+        dashboard.add_grid(layout, (patch, backup), narrow_columns=1, spacing=12)
 
         recent, contents = surface()
-        contents.addLayout(row(
-            label("Recently installed", "section"), None,
+        layout.addWidget(recent)
+        dashboard.add_grid(contents, (
+            label("Recently installed", "section"),
             button("View install history", lambda: self.go(3), glyph="history"),
-        ))
+        ), narrow_columns=1, spacing=8)
         self.recent_empty = label("No installations have been recorded yet.", "secondary", True)
         contents.addWidget(self.recent_empty)
         self.recent, self.recent_model = table(["Mod", "Creator", "Category", "Status", "Installed"], [165, 117, 110, 90])
         self.recent.setMinimumHeight(155)
         contents.addWidget(self.recent)
-        layout.addWidget(recent)
         layout.addStretch()
-        return scroll_area(page)
+        return dashboard
 
     def review_script_mods(self):
         self.go(2)
