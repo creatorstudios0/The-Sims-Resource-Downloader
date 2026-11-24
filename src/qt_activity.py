@@ -40,7 +40,7 @@ class ActivityConsole(QWidget):
         self.output.setObjectName("activityConsole")
         self.output.setAccessibleName("Activity log")
         self.output.setReadOnly(True)
-        self.output.setMaximumBlockCount(3000)
+        self.output.setMaximumBlockCount(self.entries.maxlen)
         self.output.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         toolbar = row(self.search, self.level, button("Open log folder", open_logs, glyph="folder"),
                       button("Copy visible", self.copy), button("Clear session", self.clear))
@@ -62,7 +62,9 @@ class ActivityConsole(QWidget):
             cursor.insertBlock()
         style = QTextCharFormat()
         style.setForeground(QColor(LEVELS.get(level, palette("Midnight").text)))
-        cursor.insertText(text, style)
+        # Keep each event in one QTextBlock so eviction preserves multiline messages.
+        display_text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\u2029", "\n")
+        cursor.insertText(display_text.replace("\n", "\u2028"), style)
 
     def append(self, level, text):
         at_capacity = len(self.entries) == self.entries.maxlen

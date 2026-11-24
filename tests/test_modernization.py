@@ -521,6 +521,25 @@ def test_activity_filters_and_popup_preference(app_state):
 
 
 
+def test_activity_retains_complete_multiline_events(app_state):
+    _, window = app_state
+    console = window.activity_console
+    console.clear()
+    console.append("INFO", "Oldest event")
+    console.append("ERROR", "Error heading\r\nError detail")
+    for index in range(console.entries.maxlen - 2):
+        console.append("INFO", f"Event {index}")
+
+    assert console.output.toPlainText().startswith("Oldest event\nError heading\nError detail\n")
+    console.append("INFO", "Newest event")
+    assert console.output.toPlainText().startswith("Error heading\nError detail\n")
+    console.level.setCurrentText("Error")
+    assert console.output.toPlainText() == "Error heading\nError detail"
+    console.level.setCurrentText("All levels")
+    console.append("INFO", "Another event")
+    assert "Error detail" not in console.output.toPlainText()
+
+
 def test_scanned_mod_keeps_saved_memberships_when_toggled(app_state, qtbot, tmp_path):
     service, window = app_state
     service.state["game"] = str(tmp_path)
