@@ -13,6 +13,7 @@ def collect(root):
     files = [root / name for name in DOCUMENTS]
     files.extend(sorted((root / "src").glob("*.py")))
     files.append(root / "src" / "config.json")
+    files.extend(sorted(path for path in (root / "src" / "assets").glob("*") if path.is_file()))
     missing = [str(path) for path in files if not path.is_file()]
     if missing:
         raise FileNotFoundError("Missing release files: " + ", ".join(missing))

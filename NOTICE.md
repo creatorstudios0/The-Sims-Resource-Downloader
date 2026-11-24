@@ -11,3 +11,9 @@ This production-ready build adds:
 - GitHub-ready cleanup for generated runtime files
 
 The original project is licensed under the MIT License. See [LICENSE](./LICENSE).
+
+## Desktop interface assets
+
+- Inter is distributed under the [SIL Open Font License](src/assets/Inter-OFL.txt).
+- Lucide icon shapes are distributed under the [Lucide license](src/assets/Lucide-LICENSE.txt).
+- The dashboard house illustration is original generated artwork for CreatorStudios.
