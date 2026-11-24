@@ -750,6 +750,11 @@ class LibraryService(QObject):
         if target.exists() or target.is_symlink():
             raise FileExistsError(target)
         original.rename(target)
+        target_key = os.path.normcase(str(target))
+        for groups in (self.profiles, self.collections):
+            for name, members in groups.items():
+                if key in members:
+                    groups[name] = sorted((set(members) - {key}) | {target_key})
         self.history_event("", "Restore" if record["disabled"] else "Quarantine", "Completed", [str(target)])
         self.publish()
         self.scan()

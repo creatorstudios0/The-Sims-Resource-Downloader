@@ -1110,11 +1110,17 @@ class MainWindow(QMainWindow):
     def edit_group(self, kind, operation):
         groups = self.group_records(kind)
         name = getattr(self, kind)
-        if operation in {"add", "remove"} and not self.library_keys():
-            self.inform("Select mods first.", "warning")
-            return
-        if operation == "add" and not name and groups:
-            name, accepted = QInputDialog.getItem(self, f"Add to {kind}", "Choose a group", sorted(groups), editable=False)
+        if operation in {"add", "remove"}:
+            selected_members = self.selected_members()
+            if not selected_members:
+                self.inform("Select mods first.", "warning")
+                return
+        if operation == "add" and groups:
+            choices = sorted(groups, key=str.casefold)
+            current = choices.index(name) if name in groups else 0
+            name, accepted = QInputDialog.getItem(
+                self, f"Add to {kind}", "Choose a group", choices, current, editable=False
+            )
             if not accepted:
                 return
         if not name or name not in groups:
@@ -1137,7 +1143,6 @@ class MainWindow(QMainWindow):
             setattr(self, kind, new)
         else:
             members = set(groups[name])
-            selected_members = self.selected_members()
             groups[name] = sorted(members | selected_members if operation == "add" else members - selected_members)
         self.s.publish()
         self.inform(f"Updated {kind}.", "success")
