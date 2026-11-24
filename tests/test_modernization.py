@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import zipfile
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QAbstractAnimation, QPoint, Qt
 from PySide6.QtWidgets import QMessageBox
 
 import qt_services
@@ -15,6 +15,7 @@ import curseforge
 from desktop_qt import MainWindow
 from desktop_data import parse_url
 from qt_services import LibraryService, scan_files
+from qt_theme import ToggleSwitch
 from desktop_transfer import DesktopTSRDownload as TSRDownload
 
 URL = "https://www.thesimsresource.com/downloads/123"
@@ -50,6 +51,42 @@ def test_navigation_resize_and_state(app_state, qtbot):
     data = json.loads(service.path.read_text(encoding="utf-8"))
     assert data["settings"]["workers"] == 2
     assert Path(data["settings"]["downloads"]).is_dir()
+
+
+def test_desktop_switches_keep_preferences_in_sync(app_state, qtbot, monkeypatch):
+    service, window = app_state
+    monkeypatch.delenv("QT_REDUCED_MOTION", raising=False)
+    service.settings["animations"] = True
+    window.sync_settings()
+
+    window.go(1)
+    queue_switch = window.clipboard_toggle
+    settings_switch = window.setting_controls["watch"]
+    assert isinstance(queue_switch, ToggleSwitch)
+    assert isinstance(settings_switch, ToggleSwitch)
+    initial = queue_switch.isChecked()
+
+    qtbot.mouseClick(queue_switch, Qt.MouseButton.LeftButton, pos=QPoint(18, 13))
+    assert queue_switch.isChecked() != initial
+    assert settings_switch.isChecked() == queue_switch.isChecked()
+    assert service.settings["watch"] == queue_switch.isChecked()
+    assert queue_switch.slide.state() == QAbstractAnimation.State.Running
+
+    monkeypatch.setenv("QT_REDUCED_MOTION", "1")
+    window.apply_theme()
+    assert queue_switch.slide.state() == QAbstractAnimation.State.Stopped
+    window.go(6)
+    settings_switch.setFocus()
+    qtbot.keyClick(settings_switch, Qt.Key.Key_Space)
+    assert settings_switch.isChecked() == initial
+    assert settings_switch.slide.state() == QAbstractAnimation.State.Stopped
+    assert queue_switch.isChecked() != initial
+
+    window.save_settings()
+    assert queue_switch.isChecked() == initial
+    assert service.settings["watch"] == initial
+    saved = json.loads(service.path.read_text(encoding="utf-8"))
+    assert saved["settings"]["watch"] == initial
 
 
 def test_import_dependencies_progress_retry_and_pause(app_state, qtbot, monkeypatch):

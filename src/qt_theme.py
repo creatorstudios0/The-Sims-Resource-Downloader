@@ -1,9 +1,12 @@
 """Visual tokens and reusable Qt widgets for the desktop workspace."""
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, QSize, QByteArray
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtCore import (
+    QByteArray, QAbstractAnimation, QAbstractTableModel, QEasingCurve, QModelIndex, QRect, QRectF,
+    QSize, Qt, QVariantAnimation,
+)
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QAbstractItemView, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+    QAbstractItemView, QCheckBox, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QStyle, QStyledItemDelegate, QStyleOptionProgressBar, QTableView, QVBoxLayout, QWidget,
 )
 
@@ -46,11 +49,11 @@ def theme(accent, compact=False):
     QMainWindow, QWidget#workspace, QWidget#scrollViewport {{ background: #0C0D18; }}
     QFrame#sidebar {{ background: #111322; border-right: 1px solid #253244; }}
     QFrame#surface, QFrame#stat {{ background: #191C30; border: 1px solid #30334C; border-radius: 11px; }}
-    QFrame#stat {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2A2749, stop:1 #191C30); }}
+    QFrame#stat {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #27233E, stop:1 #191C30); }}
+    QFrame#dashboardActions {{ background: #201D35; border: 1px solid #40365D; border-radius: 11px; }}
+    QLabel#metricIcon {{ background: #393051; border-radius: 8px; }}
+    QLabel#metricLabel {{ color: #E1DDF5; font-weight: 650; }}
     QLabel#pageTitle {{ font-size: 27pt; font-weight: 700; color: #F5F2FF; }}
-    QLabel#heroTitle {{ font-size: 21pt; font-weight: 750; color: #FFFFFF; }}
-    QFrame#hero {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #32244F, stop:0.55 #252547, stop:1 #1B304B); border: 1px solid #67518C; border-radius: 18px; }}
-    QFrame#hero QLabel#secondary {{ color: #D3D1E8; }}
     QPushButton#brandButton {{ font-size: 11pt; font-weight: 800; letter-spacing: 1px; color: #E1D6FF; border: none; background: transparent; text-align: left; }}
     QPushButton#brandButton:hover {{ background: #292541; }}
     QLabel#section {{ font-size: 13pt; font-weight: 650; }}
@@ -142,6 +145,96 @@ def scroll_area(widget):
     view.viewport().setObjectName("scrollViewport")
     view.setWidget(widget)
     return view
+
+
+class ToggleSwitch(QCheckBox):
+    """A binary checkbox with a sliding thumb and native checkable behavior."""
+
+    track_width = 38
+    track_height = 22
+    label_gap = 10
+    margin = 3
+
+    def __init__(self, text):
+        super().__init__(text)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+        self.accent = QColor("#A996FF")
+        self.animate_changes = True
+        self.slide = QVariantAnimation(self)
+        self.slide.setDuration(150)
+        self.slide.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.slide.valueChanged.connect(self.update)
+        self.clicked.connect(self.animate_toggle)
+
+    def set_appearance(self, accent, animate):
+        self.accent = QColor(accent)
+        self.animate_changes = animate
+        if not animate:
+            self.slide.stop()
+        self.update()
+
+    def animate_toggle(self, checked):
+        if not self.animate_changes:
+            return
+        start = float(not checked)
+        if self.slide.state() == QAbstractAnimation.State.Running:
+            start = self.slide.currentValue()
+        self.slide.stop()
+        self.slide.setStartValue(start)
+        self.slide.setEndValue(float(checked))
+        self.slide.start()
+
+    def sizeHint(self):
+        font = self.fontMetrics()
+        return QSize(self.track_width + self.label_gap + font.horizontalAdvance(self.text()) + 2 * self.margin,
+                     max(self.track_height, font.height()) + 2 * self.margin)
+
+    def minimumSizeHint(self):
+        return self.sizeHint()
+
+    def hitButton(self, position):
+        bounds = QRect(0, 0, min(self.width(), self.sizeHint().width()), self.height())
+        return QStyle.visualRect(self.layoutDirection(), self.rect(), bounds).contains(position)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        left_to_right = self.layoutDirection() == Qt.LayoutDirection.LeftToRight
+        track = QRect(self.margin, (self.height() - self.track_height) // 2, self.track_width, self.track_height)
+        track = QRectF(QStyle.visualRect(self.layoutDirection(), self.rect(), track))
+        checked = self.isChecked()
+        position = float(checked)
+        if self.slide.state() == QAbstractAnimation.State.Running and self.slide.endValue() == position:
+            position = self.slide.currentValue()
+        if not left_to_right:
+            position = 1.0 - position
+
+        track_color = self.accent if checked else QColor("#30354C")
+        outline = self.accent if checked or self.underMouse() else QColor("#717897")
+        thumb = QColor("#17152A" if checked else "#F1F0FF")
+        if not self.isEnabled():
+            track_color = QColor("#2A2D40")
+            outline = QColor("#484D65")
+            thumb = QColor("#858BA6")
+
+        if self.hasFocus():
+            painter.setPen(QPen(self.accent, 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(track.adjusted(-2, -2, 2, 2), 13, 13)
+        painter.setPen(QPen(outline, 1))
+        painter.setBrush(track_color)
+        painter.drawRoundedRect(track, 11, 11)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(thumb)
+        painter.drawEllipse(QRectF(track.x() + 4 + 16 * position, track.y() + 4, 14, 14))
+
+        label_offset = self.margin + self.track_width + self.label_gap
+        text_bounds = QRect(label_offset, 0, max(0, self.width() - label_offset), self.height())
+        text_bounds = QStyle.visualRect(self.layoutDirection(), self.rect(), text_bounds)
+        alignment = Qt.AlignmentFlag.AlignLeft if left_to_right else Qt.AlignmentFlag.AlignRight
+        painter.setPen(QColor("#F1F0FF" if self.isEnabled() else "#858BA6"))
+        painter.drawText(text_bounds, alignment | Qt.AlignmentFlag.AlignVCenter, self.text())
 
 
 class Rows(QAbstractTableModel):
