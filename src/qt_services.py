@@ -26,7 +26,7 @@ from profile_backups import ProfileBackups, read_state
 from sims_install import digest, install, install_all, install_plan, installed_path, verify_record, TRAY_EXTENSIONS
 from windows_folders import app_data, default_downloads, detect_game
 
-VERSION = "2.1.1"
+VERSION = "2.2.0"
 RELEASES = "https://github.com/creatorstudios0/The-Sims-Resource-Downloader/releases"
 FROZEN = getattr(sys, "frozen", False)
 DATA_DIR = app_data() if FROZEN else Path(PROJECT_DIR)
@@ -60,7 +60,7 @@ def settings_defaults():
                 workers=CONFIG["maxActiveDownloads"], organize=CONFIG.get("organizeDownloads", True),
                 watch=False, attempts=3, dependencies=True, notifications=True, auto_scan=True,
                 duplicates=True, backup_enabled=False, backup=str(DATA_DIR / "Backups"),
-                website_links=False, install_location="", mods="", accent="#A996FF", animations=True, density="Comfortable")
+                website_links=False, install_location="", mods="", accent="#A996FF", animations=True, density="Comfortable", theme="Midnight")
 
 
 def release_info():
@@ -284,6 +284,11 @@ class LibraryService(QObject):
         self.batches = self.state.setdefault("installs", {})
         self.history = self.state.setdefault("history", [])
         self.profiles = self.state.setdefault("profiles", {})
+        collections = self.state.get("collections")
+        self.collections = {name: members for name, members in collections.items()
+                            if isinstance(members, list) and all(isinstance(member, str) for member in members)} \
+            if isinstance(collections, dict) else {}
+        self.state["collections"] = self.collections
         self.state.setdefault("queueHidden", [])
         for item in self.items.values():
             if item["status"] == "Downloading":

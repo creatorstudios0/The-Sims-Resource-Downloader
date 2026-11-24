@@ -447,3 +447,74 @@ def test_safe_transfer_does_not_replace_existing_file(tmp_path, monkeypatch):
     published = Path(downloader._attemptDownload(str(tmp_path), lambda *args: None, False))
     assert published != existing and published.read_bytes() == b"data"
     assert existing.read_bytes() == b"preserve"
+
+
+
+def test_dashboard_storage_filters_real_scan_results(app_state, qtbot, tmp_path):
+    service, window = app_state
+    service.state["game"] = str(tmp_path)
+    mods = tmp_path / "Mods"
+    mods.mkdir()
+    (mods / "outfit.package").write_bytes(b"x" * 60)
+    (mods / "controller.ts4script").write_bytes(b"x" * 40)
+
+    service.scan()
+    qtbot.waitUntil(lambda: not service.jobs)
+    dashboard = window.dashboard
+    assert window.stats[0].text() == "2"
+    assert dashboard.storage_bar.value() == 60
+    dashboard.storage_type.setCurrentText("Script mods")
+    assert dashboard.storage_bar.value() == 40
+    qtbot.mouseClick(dashboard.storage_open, Qt.MouseButton.LeftButton)
+    assert window.pages.currentIndex() == 2
+    assert [record[1][0] for record in window.library_model.rows] == ["controller.ts4script"]
+    window.view_switch.setCurrentText("Compact")
+    assert window.library_list.isColumnHidden(1)
+    window.view_switch.setCurrentText("Grid")
+    assert window.grid_model.rowCount() == 1
+    window.view_switch.setCurrentText("List")
+    assert not window.library_list.isColumnHidden(1)
+
+
+def test_collections_persist_and_filter_independently(app_state, qtbot, tmp_path, monkeypatch):
+    service, window = app_state
+    service.state["game"] = str(tmp_path)
+    mods = tmp_path / "Mods"
+    mods.mkdir()
+    (mods / "A.package").write_bytes(b"family")
+    (mods / "B.package").write_bytes(b"build")
+    service.scan()
+    qtbot.waitUntil(lambda: not service.jobs)
+
+    window.go(2)
+    window.library_list.selectRow(0)
+    monkeypatch.setattr("desktop_qt.QInputDialog.getText", lambda *args, **kwargs: ("Family", True))
+    window.save_group("collection")
+    assert "Family" in json.loads(service.path.read_text(encoding="utf-8"))["collections"]
+    assert not service.profiles
+    window.collection_control.setCurrentText("Family")
+    assert [record[1][0] for record in window.library_model.rows] == ["A.package"]
+    window.library_list.selectRow(0)
+    window.edit_group("collection", "remove")
+    assert window.library_model.rowCount() == 0
+    window.clear_library_filters()
+    assert window.library_model.rowCount() == 2
+
+
+def test_activity_filters_and_popup_preference(app_state):
+    service, window = app_state
+    console = window.activity_console
+    console.append("INFO", "Completed library scan")
+    console.append("ERROR", "Library path could not be read")
+    console.level.setCurrentText("Error")
+    assert console.output.toPlainText() == "Library path could not be read"
+    console.search.setText("download")
+    assert not console.output.toPlainText()
+    console.search.clear()
+    console.level.setCurrentText("All levels")
+    assert "Completed library scan" in console.output.toPlainText()
+
+    service.settings["notifications"] = False
+    window.toast("warning", "A dependency needs attention")
+    assert window.notifications.entries[0][2] == "A dependency needs attention"
+    assert not window.toast_frame.isVisible()

@@ -2,7 +2,6 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 import csv
-import logging
 import os
 import sys
 
@@ -10,13 +9,17 @@ from PySide6.QtCore import QBuffer, QIODevice, QByteArray, QPropertyAnimation, Q
 from PySide6.QtGui import QIcon, QImageReader, QPixmap, QColor, QDesktopServices, QKeySequence, QShortcut, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog,
-    QFrame, QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QInputDialog, QLineEdit, QListWidget,
-    QListView, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QSpinBox, QSplitter,
+    QFrame, QGraphicsOpacityEffect, QHBoxLayout, QInputDialog, QLineEdit, QListWidget, QMenu,
+    QListView, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QSizePolicy, QSpinBox, QSplitter,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
 import curseforge
 from logger import logger
+from library_view import FILE_STATES, FILE_TYPES, extension, library_rows, member_key
+from qt_activity import ActivityConsole, ConsoleHandler, Notifications
+from qt_dashboard import Dashboard
+from qt_tokens import ACCENT, DENSITIES, THEMES, palette
 from qt_discover import DiscoverPage
 from qt_services import (
     BUSY, DATA_DIR, LABELS, LOOKUP, RELEASES, STATE_PATH, VERSION, WAITING,
@@ -67,32 +70,22 @@ def page_layout():
     return widget, layout
 
 
-class ConsoleHandler(logging.Handler):
-    def __init__(self, display):
-        super().__init__(logging.INFO)
-        self.display = display
-        self.setFormatter(logging.Formatter("%(asctime)s  %(levelname)-7s  %(message)s", "%H:%M:%S"))
-
-    def emit(self, record):
-        self.display(self.format(record))
-
-
 class MainWindow(QMainWindow):
-    console_line = Signal(str)
+    console_line = Signal(str, str)
 
     def __init__(self, service):
         super().__init__()
         self.s = service
         self.setWindowTitle("CreatorStudios • Sims 4 Mod Library")
-        self.setWindowIcon(icon("brand", "#A996FF"))
+        self.setWindowIcon(icon("brand", ACCENT))
         self.resize(1320, 850)
         self.setMinimumSize(785, 605)
         self.collapsed = self.manual_collapse = self.closing = False
         self.profile = None
+        self.collection = None
         self.library_entries = {}
         self.thumbnails = {}
         self.thumbnail_requested = set()
-        self.recent_items = {}
         self.website_previews = set()
         self.website_review = False
         self.setup()
@@ -107,8 +100,12 @@ class MainWindow(QMainWindow):
         self.s.download_ready.connect(self.website_download_ready)
         QApplication.clipboard().dataChanged.connect(self.clipboard_changed)
         QShortcut(QKeySequence("Ctrl+L"), self, activated=self.focus_import)
-        QShortcut(QKeySequence("Ctrl+F"), self, activated=self.focus_search)
+        QShortcut(QKeySequence("Ctrl+F"), self, activated=self.find_on_page)
         QShortcut(QKeySequence("Ctrl+K"), self, activated=self.command_palette)
+        QShortcut(QKeySequence("Ctrl+Shift+N"), self, activated=self.open_notifications)
+        QShortcut(QKeySequence("Ctrl+Shift+R"), self, activated=self.s.scan)
+        for page in range(len(NAV)):
+            QShortcut(QKeySequence(f"Alt+{page + 1}"), self, activated=lambda index=page: self.go(index))
         self.go(0)
         self.refresh()
         self.s.auto_scan()
@@ -129,11 +126,11 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self.sidebar = QFrame()
         self.sidebar.setObjectName("sidebar")
-        self.sidebar.setFixedWidth(224)
+        self.sidebar.setFixedWidth(192)
         side = QVBoxLayout(self.sidebar)
-        side.setContentsMargins(14, 16, 14, 16)
-        side.setSpacing(8)
-        self.brand = button("CREATORSTUDIOS", self.toggle_sidebar, glyph="brand")
+        side.setContentsMargins(9, 15, 9, 15)
+        side.setSpacing(4)
+        self.brand = button("CreatorStudios", self.toggle_sidebar, glyph="brand")
         self.brand.setObjectName("brandButton")
         self.brand.setToolTip("Collapse or expand navigation")
         self.brand.setAccessibleName("Toggle sidebar")
@@ -152,7 +149,7 @@ class MainWindow(QMainWindow):
             control = button(name, lambda checked=False, page=index: self.go(page), glyph=glyph)
             control.setCheckable(True)
             control.setProperty("nav", True)
-            control.setToolTip(name)
+            control.setToolTip(f"{name} (Alt+{index + 1})")
             control.setAccessibleName(name)
             self.nav.addButton(control, index)
             self.nav_buttons.append(control)
@@ -160,14 +157,14 @@ class MainWindow(QMainWindow):
         side.addStretch()
         self.health_label = label("Library health · awaiting scan", "secondary", True)
         self.release_status = label("", "secondary", True)
-        self.version_label = label(f"CREATORSTUDIOS  ·  v{VERSION}", "eyebrow")
+        self.version_label = label(f"MOD LIBRARY  /  v{VERSION}", "eyebrow")
         for widget in (self.health_label, self.release_status, self.version_label):
             side.addWidget(widget)
         shell.addWidget(self.sidebar)
         main = QWidget()
         main.setObjectName("workspace")
         content = QVBoxLayout(main)
-        content.setContentsMargins(24, 20, 24, 16)
+        content.setContentsMargins(18, 15, 18, 13)
         content.setSpacing(14)
         header = QVBoxLayout()
         header.setSpacing(3)
@@ -175,13 +172,14 @@ class MainWindow(QMainWindow):
         self.description = label("", "secondary", True)
         header.addWidget(self.title)
         header.addWidget(self.description)
-        self.releases = button("Check releases", self.check_releases, glyph="refresh")
-        self.quick_switch = button("Quick switch  Ctrl+K", self.command_palette, glyph="search")
+        notify = button("Notifications", self.open_notifications, glyph="bell")
+        self.notifications = Notifications(notify)
+        self.quick_switch = button("Commands  Ctrl+K", self.command_palette, glyph="search")
         self.quick_switch.setAccessibleName("Open quick switch command palette")
         line = QHBoxLayout()
         line.addLayout(header, 1)
         line.addWidget(self.quick_switch, alignment=Qt.AlignmentFlag.AlignTop)
-        line.addWidget(self.releases, alignment=Qt.AlignmentFlag.AlignTop)
+        line.addWidget(notify, alignment=Qt.AlignmentFlag.AlignTop)
         content.addLayout(line)
         self.pages = QStackedWidget()
         for builder in (self.dashboard_page, self.queue_page, self.library_page, self.history_page,
@@ -212,6 +210,9 @@ class MainWindow(QMainWindow):
         self.nav_buttons[index].setChecked(True)
         self.title.setText(NAV[index][0])
         self.description.setText(NAV[index][2])
+        self.description.setVisible(index != 0)
+        if index == 2:
+            self.schedule_grid_thumbnails()
 
     def command_palette(self):
         """Keyboard-first navigation without changing the existing workflows."""
@@ -221,6 +222,10 @@ class MainWindow(QMainWindow):
             for index, (name, glyph, description) in enumerate(NAV)
         ]
         actions.extend([
+            {"title": "Open notifications", "description": "Review session alerts",
+             "keywords": "alerts bell", "run": self.open_notifications},
+            {"title": "Search the activity log", "description": "Find console messages",
+             "keywords": "debug log errors", "run": self.focus_console},
             {"title": "Import local content", "description": "Choose Sims 4 files to install",
              "keywords": "mods package zip", "run": self.add_files},
             {"title": "Scan library", "description": "Inspect folders and refresh library health",
@@ -267,10 +272,22 @@ class MainWindow(QMainWindow):
 
         search.textChanged.connect(update)
         search.returnPressed.connect(execute)
+        for key, step in (("Down", 1), ("Up", -1)):
+            shortcut = QShortcut(QKeySequence(key), search)
+            shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+            shortcut.activated.connect(lambda delta=step: results.setCurrentRow(
+                max(0, min(results.count() - 1, results.currentRow() + delta))))
         results.itemActivated.connect(lambda _: execute())
         update("")
         search.setFocus()
         dialog.exec()
+
+    def open_notifications(self):
+        self.notifications.open(self)
+
+    def focus_console(self):
+        self.go(5)
+        self.activity_console.search.setFocus()
 
     def focus_import(self):
         self.go(1)
@@ -280,6 +297,14 @@ class MainWindow(QMainWindow):
         self.go(2)
         self.search.setFocus()
 
+    def find_on_page(self):
+        fields = {2: self.search, 3: self.history_search, 4: self.discover.search_box, 5: self.activity_console.search}
+        target = fields.get(self.pages.currentIndex())
+        if target:
+            target.setFocus()
+        else:
+            self.focus_search()
+
     def toggle_sidebar(self):
         self.manual_collapse = not self.manual_collapse
         self.adapt_sidebar()
@@ -288,14 +313,16 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         if hasattr(self, "sidebar"):
             self.adapt_sidebar()
+            self.schedule_grid_thumbnails()
+            self.fit_workspace()
 
     def adapt_sidebar(self):
         collapsed = self.width() < 1020 or self.manual_collapse
         if collapsed == self.collapsed:
             return
         self.collapsed = collapsed
-        self.sidebar.setFixedWidth(76 if collapsed else 224)
-        self.brand.setText("" if collapsed else "CREATORSTUDIOS")
+        self.sidebar.setFixedWidth(58 if collapsed else 192)
+        self.brand.setText("" if collapsed else "CreatorStudios")
         for index, control in enumerate(self.nav_buttons):
             control.setText("" if collapsed else NAV[index][0])
         for control in (self.workspace_label, self.preferences_label, self.health_label, self.release_status, self.version_label):
@@ -304,14 +331,26 @@ class MainWindow(QMainWindow):
     def apply_theme(self):
         compact = self.s.settings["density"] == "Compact"
         accent = self.s.settings["accent"]
-        QApplication.instance().setStyleSheet(theme(accent, compact))
+        QApplication.instance().setStyleSheet(theme(accent, compact, self.s.settings["theme"]))
         animate = self.s.settings["animations"] and not os.environ.get("QT_REDUCED_MOTION")
         for control in self.findChildren(ToggleSwitch):
-            control.set_appearance(accent, animate)
-        for view in (self.queue_view, self.library_list, self.history_view, self.recent, self.discover.results):
-            view.verticalHeader().setDefaultSectionSize(29 if compact else 36)
+            control.set_appearance(accent, animate, palette(self.s.settings["theme"]))
+        for view in (self.queue_view, self.history_view, self.discover.results):
+            view.verticalHeader().setDefaultSectionSize(DENSITIES["Compact" if compact else "Comfortable"][0])
+        self.apply_library_density()
+        self.fit_workspace()
+
+    def fit_workspace(self):
+        if not hasattr(self, "history_view"):
+            return
+        narrow = self.width() < 1000
+        for view, columns in ((self.queue_view, (1, 2, 6, 7, 8)),
+                              (self.history_view, (2, 5, 6))):
+            for column in columns:
+                view.setColumnHidden(column, narrow)
 
     def toast(self, level, text, force=False):
+        self.notifications.add(level, text)
         if not force and not self.s.settings["notifications"]:
             return
         self.toast_content.setText(text)
@@ -345,107 +384,26 @@ class MainWindow(QMainWindow):
         return dialog.exec() == QMessageBox.StandardButton.Yes
 
     def dashboard_page(self):
-        page, layout = page_layout()
-        layout.setContentsMargins(0, 0, 4, 4)
-        layout.setSpacing(14)
+        self.dashboard = Dashboard(self)
+        self.stats = self.dashboard.stats
+        self.diagnostics = self.dashboard.diagnostics
+        self.patch_summary = self.dashboard.patch_summary
+        self.patch_check = self.dashboard.patch_check
+        self.patch_reviewed = self.dashboard.patch_reviewed
+        self.backup_summary = self.dashboard.backup_summary
+        self.backup_create = self.dashboard.backup_create
+        self.backup_open = self.dashboard.backup_open
+        return self.dashboard
 
-        metrics = QGridLayout()
-        metrics.setHorizontalSpacing(10)
-        self.stats = []
-        for column, (name, detail, glyph) in enumerate((
-            ("Installed mods", "Package and script files", "library"),
-            ("Download queue", "Waiting and active items", "queue"),
-            ("Completed installs", "Successful install batches", "history"),
-            ("Library storage", "Installed content on disk", "folder"),
-        )):
-            card, contents = surface("stat")
-            contents.setSpacing(5)
-            badge = label("", "metricIcon")
-            badge.setFixedSize(30, 30)
-            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            badge.setPixmap(icon(glyph, "#D5C8FF").pixmap(QSize(17, 17)))
-            contents.addLayout(row(badge, None))
-            contents.addWidget(label(name, "metricLabel", True))
-            value = label("—", "statValue")
-            contents.addWidget(value)
-            contents.addWidget(label(detail, "secondary", True))
-            contents.addStretch()
-            metrics.addWidget(card, 0, column)
-            metrics.setColumnStretch(column, 1)
-            self.stats.append(value)
-        layout.addLayout(metrics)
-
-        quick, controls = surface("dashboardActions")
-        controls.addLayout(row(
-            label("Quick actions", "section"), None,
-            button("Discover content", lambda: self.go(4), True, "search"),
-            button("Import files", self.add_files, glyph="plus"),
-            button("View library", lambda: self.go(2), glyph="library"),
-        ))
-        layout.addWidget(quick)
-
-        health, contents = surface()
-        contents.addLayout(row(
-            label("Library health", "section"), None,
-            button("Scan library", self.s.scan, glyph="refresh"),
-            button("Export mod audit", self.export_audit, glyph="folder"),
-        ))
-        self.diagnostics = label("", "secondary", True)
-        contents.addWidget(self.diagnostics)
-        layout.addWidget(health)
-
-        maintenance = QGridLayout()
-        maintenance.setHorizontalSpacing(12)
-        maintenance.setColumnStretch(0, 1)
-        maintenance.setColumnStretch(1, 1)
-
-        patch, controls = surface()
-        controls.addWidget(label("Patch Day Checkup", "section"))
-        self.patch_summary = label("", "secondary", True)
-        controls.addWidget(self.patch_summary)
-        controls.addStretch()
-        self.patch_check = button("Check game version", self.s.check_patch, glyph="refresh")
-        self.patch_reviewed = button("Mark reviewed", self.s.mark_patch_reviewed, glyph="check")
-        advice = "https://help.ea.com/en/articles/the-sims/the-sims-4/mods-and-the-sims-4-game-updates/"
-        patch_actions = QGridLayout()
-        patch_actions.addWidget(self.patch_check, 0, 0)
-        patch_actions.addWidget(button("Review script mods", self.review_script_mods), 0, 1)
-        patch_actions.addWidget(self.patch_reviewed, 1, 0)
-        patch_actions.addWidget(button("EA patch guide", lambda: QDesktopServices.openUrl(QUrl(advice))), 1, 1)
-        controls.addLayout(patch_actions)
-        maintenance.addWidget(patch, 0, 0)
-
-        backup, controls = surface()
-        controls.addWidget(label("Mods and Tray backups", "section"))
-        self.backup_summary = label("", "secondary", True)
-        self.backup_summary.setTextFormat(Qt.TextFormat.PlainText)
-        controls.addWidget(self.backup_summary)
-        controls.addStretch()
-        self.backup_create = button("Create backup ZIP", self.create_content_backup, True, "plus")
-        self.backup_open = button("Open last backup", self.open_content_backup, glyph="folder")
-        controls.addWidget(self.backup_create, alignment=Qt.AlignmentFlag.AlignLeft)
-        controls.addWidget(self.backup_open, alignment=Qt.AlignmentFlag.AlignLeft)
-        maintenance.addWidget(backup, 0, 1)
-        layout.addLayout(maintenance)
-
-        recent, contents = surface()
-        contents.addLayout(row(
-            label("Recently installed", "section"), None,
-            button("View install history", lambda: self.go(3), glyph="history"),
-        ))
-        self.recent_empty = label("No installations have been recorded yet.", "secondary", True)
-        contents.addWidget(self.recent_empty)
-        self.recent, self.recent_model = table(["Mod", "Creator", "Category", "Status", "Installed"], [165, 117, 110, 90])
-        self.recent.setMinimumHeight(155)
-        contents.addWidget(self.recent)
-        layout.addWidget(recent)
-        layout.addStretch()
-        return scroll_area(page)
+    def show_storage_files(self, index):
+        self.go(2)
+        self.clear_library_filters()
+        self.file_filter.setCurrentIndex(index + 1)
+        self.state_filter.setCurrentText("Installed")
 
     def review_script_mods(self):
         self.go(2)
-        self.category_filter.setCurrentText("All categories")
-        self.profile_control.setCurrentIndex(0)
+        self.clear_library_filters()
         self.search.setText(".ts4script")
         self.search.setFocus()
         self.s.scan()
@@ -505,25 +463,15 @@ class MainWindow(QMainWindow):
         return self.discover
 
     def console_page(self):
-        page, layout = page_layout()
-        self.console = QPlainTextEdit()
-        self.console.setObjectName("activityConsole")
-        self.console.setAccessibleName("Activity console")
-        self.console.setReadOnly(True)
-        self.console.setMaximumBlockCount(3000)
-        self.console.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
-        layout.addLayout(row(label("Activity log", "section"), None,
-                             button("Open log folder", self.open_logs, glyph="folder"),
-                             button("Copy log", lambda: QApplication.clipboard().setText(self.console.toPlainText())),
-                             button("Clear", self.console.clear)))
-        layout.addWidget(self.console, 1)
-        self.console_line.connect(self.console.appendPlainText, Qt.ConnectionType.QueuedConnection)
+        self.activity_console = ActivityConsole(self.open_logs)
+        self.console = self.activity_console.output
+        self.console_line.connect(self.activity_console.append, Qt.ConnectionType.QueuedConnection)
         handler = ConsoleHandler(self.console_line.emit)
         self.console_handler = handler
         logger.addHandler(handler)
         self.destroyed.connect(lambda: logger.removeHandler(handler))
-        self.console.appendPlainText(f"Sims 4 Mod Library {VERSION} started.")
-        return page
+        self.activity_console.append("INFO", f"Sims 4 Mod Library {VERSION} started.")
+        return self.activity_console
 
     def queue_page(self):
         page, layout = page_layout()
@@ -571,8 +519,32 @@ class MainWindow(QMainWindow):
         self.queue_view.setAccessibleName("Download queue")
         self.queue_view.selectionModel().selectionChanged.connect(self.queue_actions)
         self.queue_view.doubleClicked.connect(lambda _: self.dependencies(self.queue_keys()))
+        self.queue_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.queue_view.customContextMenuRequested.connect(self.queue_context)
         layout.addWidget(self.queue_view, 1)
         return page
+
+    def queue_context(self, position):
+        if not self.select_context_row(self.queue_view, position):
+            return
+        menu = QMenu(self)
+        menu.addAction("Transfer details", self.queue_details).setEnabled(len(self.queue_keys()) == 1)
+        self.add_context_actions(menu, (self.download_button, self.retry_button, self.dependency_button,
+                                        self.cancel_button, self.remove_button))
+        menu.exec(self.queue_view.viewport().mapToGlobal(position))
+
+    def queue_details(self):
+        keys = self.queue_keys()
+        if len(keys) != 1:
+            return
+        values = self.queue_cells(keys[0])
+        detail = "\n".join(f"{name}  {value[0] if isinstance(value, tuple) else value}"
+                           for name, value in zip(self.queue_model.headers[1:], values[1:]) if value)
+        dialog = QMessageBox(QMessageBox.Icon.Information, "Transfer details", values[0],
+                             QMessageBox.StandardButton.Close, self)
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        dialog.setInformativeText(detail)
+        dialog.exec()
 
     def queue_keys(self):
         return [key for key in selected(self.queue_view) if key in self.s.items]
@@ -692,6 +664,7 @@ class MainWindow(QMainWindow):
     def refresh_transfer(self, key):
         self.queue_model.patch(key, self.queue_cells(key))
         self.refresh_queue_busy()
+        self.dashboard.refresh_transfers()
 
     def queue_actions(self):
         keys = self.queue_keys()
@@ -717,66 +690,122 @@ class MainWindow(QMainWindow):
     def library_page(self):
         page, layout = page_layout()
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Search mods, creators, and filenames")
+        self.search.setPlaceholderText("Search mods…")
+        self.search.setToolTip("Search mod names, creators, categories, filenames, and source URLs. Enter an extension such as .ts4script for an exact type match.")
         self.search.setAccessibleName("Search library")
         self.search.setMinimumWidth(120)
         self.search.textChanged.connect(self.refresh_library)
         self.category_filter = QComboBox()
+        self.category_filter.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.category_filter.setMinimumContentsLength(12)
         self.category_filter.setAccessibleName("Filter library category")
         self.category_filter.addItem("All categories")
         self.category_filter.currentTextChanged.connect(self.refresh_library)
         self.sort_order = QComboBox()
         self.sort_order.setAccessibleName("Sort library")
-        self.sort_order.addItems(["Name A–Z", "Newest first", "Largest first"])
+        self.sort_order.addItems(["Name A–Z", "Newest first", "Largest first", "Creator A–Z"])
         self.sort_order.currentTextChanged.connect(self.refresh_library)
-        controls = row(button("Import files", self.add_files, True, "plus"),
-                       button("Refresh Library", self.s.scan, glyph="refresh"), self.category_filter, self.sort_order)
-        controls.insertWidget(0, self.search, 1)
+        controls = row(self.search, self.category_filter, self.sort_order,
+                       button("Import files", self.add_files, True, "plus"),
+                       button("Refresh Library", self.s.scan, glyph="refresh"))
+        controls.setStretch(0, 1)
         layout.addLayout(controls)
         self.view_switch = QComboBox()
-        self.view_switch.setAccessibleName("Grid or list view")
-        self.view_switch.addItems(["List", "Grid"])
+        self.view_switch.setAccessibleName("Library layout")
+        self.view_switch.addItems(["List", "Grid", "Compact"])
         self.view_switch.setCurrentText(self.s.state.get("libraryView", "List"))
         self.view_switch.currentIndexChanged.connect(self.switch_library)
+        self.file_filter = QComboBox()
+        self.file_filter.setAccessibleName("Filter file type")
+        self.file_filter.addItems(FILE_TYPES)
+        self.file_filter.currentTextChanged.connect(self.refresh_library)
+        self.state_filter = QComboBox()
+        self.state_filter.setAccessibleName("Filter file state")
+        self.state_filter.addItems(FILE_STATES)
+        self.state_filter.currentTextChanged.connect(self.refresh_library)
+        layout.addLayout(row(self.file_filter, self.state_filter, self.view_switch,
+                             button("Clear filters", self.clear_library_filters, glyph="filter"), None))
+
         self.profile_control = QComboBox()
+        self.profile_control.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.profile_control.setMinimumContentsLength(12)
         self.profile_control.setAccessibleName("Library profile")
         self.profile_control.currentTextChanged.connect(self.profile_changed)
-        layout.addLayout(row(self.view_switch, self.profile_control, button("Save profile", self.save_profile),
-                             button("Profile backups", self.profile_backups), button("Export TSR links", self.export_links), None))
+        self.collection_control = QComboBox()
+        self.collection_control.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.collection_control.setMinimumContentsLength(12)
+        self.collection_control.setAccessibleName("Mod collection")
+        self.collection_control.currentTextChanged.connect(self.collection_changed)
+        groups = QMenu(self)
+        groups.addAction("Create profile from selection", self.save_profile)
+        groups.addAction("Create collection from selection", lambda: self.save_group("collection"))
+        groups.addSeparator()
+        groups.addAction("Rename active profile", lambda: self.edit_group("profile", "rename"))
+        groups.addAction("Rename active collection", lambda: self.edit_group("collection", "rename"))
+        groups.addAction("Delete active profile", lambda: self.edit_group("profile", "delete"))
+        groups.addAction("Delete active collection", lambda: self.edit_group("collection", "delete"))
+        groups.addSeparator()
+        groups.addAction("Add selection to a profile", lambda: self.edit_group("profile", "add"))
+        groups.addAction("Add selection to a collection", lambda: self.edit_group("collection", "add"))
+        groups.addAction("Remove selection from active profile", lambda: self.edit_group("profile", "remove"))
+        groups.addAction("Remove selection from active collection", lambda: self.edit_group("collection", "remove"))
+        groups.addSeparator()
+        groups.addAction("Profile backups", self.profile_backups)
+        groups.addAction("Export TSR links", self.export_links)
+        manage = QPushButton("Manage")
+        manage.setIcon(icon("more"))
+        manage.setAccessibleName("Manage profiles and collections")
+        manage.setMenu(groups)
+        layout.addLayout(row(self.profile_control, self.collection_control, manage, None))
         self.library_empty = label("No mods found. Add local files or scan your Mods folder.", "secondary", True)
         layout.addWidget(self.library_empty)
         split = QSplitter()
         self.library_views = QStackedWidget()
-        self.library_list, self.library_model = table(["Mod", "Category", "Type", "Size", "Status"], [154, 142, 68, 74])
+        self.library_list, self.library_model = table(["Mod", "Category", "Type", "Size", "Status"], [136, 105, 54, 61])
+        self.library_list.setAccessibleName("Mod library list")
         self.library_list.selectionModel().selectionChanged.connect(self.library_actions)
         self.library_views.addWidget(self.library_list)
         self.library_grid = QListView()
+        self.library_grid.setAccessibleName("Mod library thumbnail grid")
         self.library_grid.setViewMode(QListView.ViewMode.IconMode)
         self.library_grid.setResizeMode(QListView.ResizeMode.Adjust)
+        self.library_grid.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
         self.library_grid.setMovement(QListView.Movement.Static)
         self.library_grid.setWrapping(True)
         self.library_grid.setWordWrap(True)
-        self.library_grid.setGridSize(QSize(136, 85))
-        self.library_grid.setIconSize(QSize(25, 25))
+        self.library_grid.setGridSize(QSize(152, 113))
+        self.library_grid.setIconSize(QSize(124, 74))
         self.library_grid.setSelectionMode(QListView.SelectionMode.ExtendedSelection)
         self.grid_model = QStandardItemModel(self.library_grid)
         self.library_grid.setModel(self.grid_model)
         self.library_grid.selectionModel().selectionChanged.connect(self.library_actions)
         self.library_views.addWidget(self.library_grid)
-        self.library_views.setCurrentIndex(self.view_switch.currentIndex())
+        self.library_views.setCurrentIndex(int(self.view_switch.currentIndex() == 1))
+        self.thumbnail_timer = QTimer(self)
+        self.thumbnail_timer.setSingleShot(True)
+        self.thumbnail_timer.setInterval(120)
+        self.thumbnail_timer.timeout.connect(self.request_grid_thumbnails)
+        self.library_grid.verticalScrollBar().valueChanged.connect(self.schedule_grid_thumbnails)
+        for view in (self.library_list, self.library_grid):
+            view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            view.customContextMenuRequested.connect(lambda point, target=view: self.library_context(target, point))
         split.addWidget(self.library_views)
         details, info = surface()
-        self.detail_title = label("Mod details", "section", True)
+        info.setContentsMargins(12, 12, 12, 12)
+        info.setSpacing(8)
+        self.detail_title = label("Mod inspector", "section", True)
         self.detail_title.setTextFormat(Qt.TextFormat.PlainText)
         self.detail = label("Select a mod to see its details.", "secondary", True)
         self.detail.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.detail.setTextFormat(Qt.TextFormat.PlainText)
+        self.detail.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.install_button = button("Install preview", self.preview_install, True)
         self.enable_button = button("Enable / disable", self.toggle_library)
         self.open_button = button("Open file location", self.open_library, glyph="folder")
         self.category_button = button("Edit category", self.edit_category)
         self.lib_deps = button("Check dependencies", self.library_dependencies)
-        self.uninstall_button = button("Uninstall managed batch", self.uninstall_library)
+        self.uninstall_button = button("Uninstall batch", self.uninstall_library)
+        self.uninstall_button.setToolTip("Uninstall files from the selected managed install batch")
         info.addWidget(self.detail_title)
         self.detail_image = label("")
         self.detail_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -787,14 +816,82 @@ class MainWindow(QMainWindow):
         for widget in (self.install_button, self.enable_button, self.open_button, self.category_button, self.lib_deps, self.uninstall_button):
             info.addWidget(widget)
         scroller = scroll_area(details)
-        scroller.setMinimumWidth(214)
-        scroller.setMaximumWidth(328)
+        scroller.setMinimumWidth(202)
+        scroller.setMaximumWidth(304)
         split.addWidget(scroller)
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 1)
         split.setSizes([670, 275])
         layout.addWidget(split, 1)
         return page
+
+    def apply_library_density(self):
+        compact = self.view_switch.currentText() == "Compact"
+        density = "Compact" if compact else self.s.settings["density"]
+        self.library_list.verticalHeader().setDefaultSectionSize(DENSITIES.get(density, DENSITIES["Comfortable"])[0])
+        for column in (1, 2):
+            self.library_list.setColumnHidden(column, compact)
+
+    def clear_library_filters(self):
+        controls = (self.search, self.category_filter, self.file_filter, self.state_filter,
+                    self.profile_control, self.collection_control)
+        for control in controls:
+            control.blockSignals(True)
+        self.search.clear()
+        for control in controls[1:]:
+            control.setCurrentIndex(0)
+        for control in controls:
+            control.blockSignals(False)
+        self.profile = None
+        self.collection = None
+        self.refresh_library()
+
+    def schedule_grid_thumbnails(self, *_):
+        if hasattr(self, "thumbnail_timer") and self.library_views.currentIndex() == 1:
+            self.thumbnail_timer.start()
+
+    def request_grid_thumbnails(self):
+        if self.pages.currentIndex() != 2 or self.library_views.currentIndex() != 1:
+            return
+        view = self.library_grid
+        grid = view.gridSize()
+        columns = max(1, view.viewport().width() // grid.width())
+        first = max(0, view.verticalScrollBar().value() // grid.height() * columns - columns)
+        count = columns * (view.viewport().height() // grid.height() + 3)
+        for key, _ in self.library_model.rows[first:first + count]:
+            item = self.library_entries.get(key, {}).get("item")
+            if item:
+                self.request_thumbnail(item)
+
+    @staticmethod
+    def select_context_row(view, position):
+        index = view.indexAt(position)
+        if not index.isValid():
+            return False
+        if not view.selectionModel().isSelected(index):
+            view.clearSelection()
+            view.setCurrentIndex(index)
+        return True
+
+    @staticmethod
+    def add_context_actions(menu, controls):
+        for control in controls:
+            action = menu.addAction(control.icon(), control.text(), control.click)
+            action.setEnabled(control.isEnabled())
+
+    def library_context(self, view, position):
+        if not self.select_context_row(view, position):
+            return
+        menu = QMenu(self)
+        self.add_context_actions(menu, (self.open_button, self.install_button, self.enable_button,
+                                        self.category_button, self.lib_deps, self.uninstall_button))
+        if self.library_keys():
+            for kind in ("profile", "collection"):
+                if self.group_records(kind):
+                    menu.addAction(f"Add to {kind}…", lambda namespace=kind: self.edit_group(namespace, "add"))
+                if getattr(self, kind):
+                    menu.addAction(f"Remove from active {kind}", lambda namespace=kind: self.edit_group(namespace, "remove"))
+        menu.exec(view.viewport().mapToGlobal(position))
 
     def library_keys(self):
         if self.library_views.currentIndex() == 1:
@@ -807,7 +904,7 @@ class MainWindow(QMainWindow):
         try:
             if getattr(self, "grid_rows", None) != rows:
                 self.grid_model.clear()
-                glyph = icon("library", "#46DFAE")
+                glyph = icon("library", ACCENT)
                 for key, cells in rows:
                     image = self.thumbnails.get(self.library_entries[key].get("item"))
                     item = QStandardItem(QIcon(image) if image else glyph, str(cells[0]))
@@ -826,9 +923,11 @@ class MainWindow(QMainWindow):
 
     def switch_library(self, index):
         previous = self.library_keys()
-        self.library_views.setCurrentIndex(index)
+        self.library_views.setCurrentIndex(int(index == 1))
+        self.apply_library_density()
         if index == 1:
             self.select_grid(self.library_model.rows, previous)
+            self.schedule_grid_thumbnails()
         else:
             selection = self.library_list.selectionModel()
             selection.clearSelection()
@@ -878,49 +977,39 @@ class MainWindow(QMainWindow):
             self.category_filter.setCurrentText(category if category in categories else "All categories")
             self.category_filter.blockSignals(False)
             category = self.category_filter.currentText()
-        result = []
-        profile = self.s.profiles.get(self.profile, []) if self.profile else None
-        for key, record in records.items():
-            if profile is not None and (record.get("item") or key) not in profile and key not in profile:
-                continue
-            if category not in ("All categories", record.get("category", "Other")):
-                continue
-            path = Path(record["path"])
-            filetype = (path.with_suffix("") if record.get("disabled") else path).suffix.lower()
-            if query == ".ts4script":
-                if filetype != query:
-                    continue
-            elif query and query not in " ".join(str(record.get(field, "")) for field in ("name", "creator", "category", "path", "url")).casefold():
-                continue
-            result.append((key, record, filetype.lstrip(".")))
-        sort_index = self.sort_order.currentIndex()
-        if sort_index == 1:
-            result.sort(key=lambda pair: pair[1].get("added") or pair[1].get("date", ""), reverse=True)
-        elif sort_index == 2:
-            result.sort(key=lambda pair: pair[1].get("size") or 0, reverse=True)
-        else:
-            result.sort(key=lambda pair: pair[1]["name"].casefold())
+        groups = (set(self.s.profiles.get(self.profile, [])) if self.profile else None,
+                  set(self.s.collections.get(self.collection, [])) if self.collection else None)
+        result = library_rows(records, query=query, category=category, file_type=self.file_filter.currentText(),
+                              state=self.state_filter.currentText(), sort=self.sort_order.currentText(),
+                              groups=groups, managed=managed_items)
         rows = []
-        for key, record, filetype in result:
-            if record["origin"] == "library":
-                status = "Installed copy exists" if key in managed_items else "Downloaded"
-            else:
-                status = "Disabled" if record.get("disabled") else "Enabled"
+        for key, record, filetype, status in result:
             tag = record.get("category", "Other") + (" (inferred)" if record.get("inferred") else "")
             rows.append((key, (record["name"], tag, filetype or "—", size_label(record.get("size")), status)))
         update_rows(self.library_list, self.library_model, rows)
         if self.library_views.currentIndex() == 1:
             self.select_grid(rows, keys)
+            self.schedule_grid_thumbnails()
         scanning = "scan" in self.s.jobs
         self.library_empty.setVisible(not rows or scanning)
         self.library_empty.setText("Scanning the library…" if scanning else
-                                   "No mods match the current filters." if query or self.profile or category != "All categories"
+                                   "No mods match the current filters." if query or self.profile or self.collection or category != "All categories"
+                                   or self.file_filter.currentIndex() or self.state_filter.currentIndex()
                                    else "No mods found. Add local files or scan your Mods folder.")
-        self.profile_control.blockSignals(True)
-        self.profile_control.clear()
-        self.profile_control.addItems(["All profiles", *sorted(self.s.profiles)])
-        self.profile_control.setCurrentText(self.profile or "All profiles")
-        self.profile_control.blockSignals(False)
+        for attr, control, groups, default in (
+            ("profile", self.profile_control, self.s.profiles, "All profiles"),
+            ("collection", self.collection_control, self.s.collections, "All collections"),
+        ):
+            active = getattr(self, attr)
+            if active not in groups:
+                setattr(self, attr, None)
+            choices = [default, *sorted(groups, key=str.casefold)]
+            if choices != [control.itemText(i) for i in range(control.count())]:
+                control.blockSignals(True)
+                control.clear()
+                control.addItems(choices)
+                control.setCurrentText(getattr(self, attr) or default)
+                control.blockSignals(False)
         self.library_actions()
 
     @staticmethod
@@ -948,7 +1037,7 @@ class MainWindow(QMainWindow):
         self.uninstall_button.setEnabled(origin == "managed" and not fs_busy)
         self.detail_image.hide()
         if not record:
-            self.detail_title.setText("Mod details")
+            self.detail_title.setText("Mod inspector")
             self.detail.setText("Select one mod to see its file and installation details.")
             return
         self.detail_title.setText(record["name"])
@@ -964,7 +1053,7 @@ class MainWindow(QMainWindow):
         self.detail.setText("\n\n".join([
             f"Creator  {record.get('creator') or 'Unknown'}",
             f"Category  {record.get('category', 'Other')}" + (" (inferred)" if record.get("inferred") else ""),
-            f"Type  {Path(record['path']).suffix}", f"Size  {size_label(record.get('size'))}",
+            f"Type  {extension(record) or 'Unknown'}", f"Size  {size_label(record.get('size'))}",
             f"Date  {local_date(record.get('added') or record.get('date', ''))}",
             f"Status  {'Disabled' if record.get('disabled') else 'Enabled' if origin != 'library' else 'Download or local source'}",
             f"Path\n{record['path']}", f"Source\n{item.get('url') or 'Local file'}",
@@ -986,22 +1075,72 @@ class MainWindow(QMainWindow):
                 self.inform(failure_message(error), "error")
 
     def profile_changed(self, name):
-        self.profile = None if name == "All profiles" else name
+        self.profile = name if name in self.s.profiles else None
         self.refresh_library()
 
+    def collection_changed(self, name):
+        self.collection = name if name in self.s.collections else None
+        self.refresh_library()
+
+    def group_records(self, kind):
+        return self.s.profiles if kind == "profile" else self.s.collections
+
+    def selected_members(self):
+        return {member_key(key, self.library_entries[key]) for key in self.library_keys()}
+
     def save_profile(self):
-        keys = self.library_keys()
-        if not keys:
-            self.inform("Select mods to save as a profile.", "warning")
+        self.save_group("profile")
+
+    def save_group(self, kind):
+        members = self.selected_members()
+        if not members:
+            self.inform(f"Select mods to create a {kind}.", "warning")
             return
-        name, accepted = QInputDialog.getText(self, "Save library profile", "Profile name")
+        name, accepted = QInputDialog.getText(self, f"Create {kind}", f"{kind.title()} name")
         name = name.strip()
-        if accepted and name and name != "All profiles":
-            if name in self.s.profiles and not self.confirm("Replace profile", f"Replace the saved selections in {name}?"):
+        if not accepted or not name or name in {"All profiles", "All collections"}:
+            return
+        groups = self.group_records(kind)
+        if name in groups and not self.confirm(f"Replace {kind}", f"Replace the saved selection in {name}?"):
+            return
+        groups[name] = sorted(members)
+        self.s.publish()
+        self.inform(f"Saved {name}.", "success")
+
+    def edit_group(self, kind, operation):
+        groups = self.group_records(kind)
+        name = getattr(self, kind)
+        if operation in {"add", "remove"} and not self.library_keys():
+            self.inform("Select mods first.", "warning")
+            return
+        if operation == "add" and not name and groups:
+            name, accepted = QInputDialog.getItem(self, f"Add to {kind}", "Choose a group", sorted(groups), editable=False)
+            if not accepted:
                 return
-            self.s.profiles[name] = sorted({self.library_entries[key].get("item") or key for key in keys})
-            self.s.publish()
-            self.inform(f"Saved {name}.", "success")
+        if not name or name not in groups:
+            self.inform(f"Choose an existing {kind} first.", "warning")
+            return
+        if operation == "delete":
+            if not self.confirm(f"Delete {kind}", f"Remove the saved group {name}?"):
+                return
+            del groups[name]
+            getattr(self, f"{kind}_control").setCurrentIndex(0)
+        elif operation == "rename":
+            new, accepted = QInputDialog.getText(self, f"Rename {kind}", "New name", text=name)
+            new = new.strip()
+            if not accepted or not new or new == name:
+                return
+            if new in groups or new in {"All profiles", "All collections"}:
+                self.inform("That name is already in use.", "warning")
+                return
+            groups[new] = groups.pop(name)
+            setattr(self, kind, new)
+        else:
+            members = set(groups[name])
+            selected_members = self.selected_members()
+            groups[name] = sorted(members | selected_members if operation == "add" else members - selected_members)
+        self.s.publish()
+        self.inform(f"Updated {kind}.", "success")
 
     def export_audit(self):
         """Run a read-only Sims 4 inventory audit outside the UI thread."""
@@ -1180,8 +1319,17 @@ class MainWindow(QMainWindow):
         self.history_detail_button = button("View details", self.inspect_history)
         self.history_open = button("Open location", self.history_folder, glyph="folder")
         self.history_undo = button("Uninstall batch", self.history_uninstall)
+        self.history_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.history_view.customContextMenuRequested.connect(self.history_context)
         layout.addLayout(row(self.history_detail_button, self.history_open, self.history_undo, None))
         return page
+
+    def history_context(self, position):
+        if not self.select_context_row(self.history_view, position):
+            return
+        menu = QMenu(self)
+        self.add_context_actions(menu, (self.history_detail_button, self.history_open, self.history_undo))
+        menu.exec(self.history_view.viewport().mapToGlobal(position))
 
     def refresh_history(self, *_):
         if not hasattr(self, "history_model"):
@@ -1305,7 +1453,7 @@ class MainWindow(QMainWindow):
             self.setting_controls[key] = picker
             controls.addLayout(row(label(title), picker, None))
         for key, name in (("watch", "Watch clipboard for TSR links"), ("dependencies", "Check dependencies during link review"),
-                          ("organize", "Sort new downloads into category folders"), ("notifications", "Show background notifications")):
+                          ("organize", "Sort new downloads into category folders"), ("notifications", "Show background notification pop-ups")):
             controls.addWidget(self.setting_toggle(key, name))
         layout.addWidget(preferences)
 
@@ -1329,14 +1477,19 @@ class MainWindow(QMainWindow):
 
         appearance, controls = surface()
         controls.addWidget(label("Appearance", "section"))
+        theme_choice = QComboBox()
+        theme_choice.setAccessibleName("Interface theme")
+        theme_choice.addItems(THEMES)
+        theme_choice.setCurrentText(self.s.settings["theme"])
+        self.setting_controls["theme"] = theme_choice
         density = QComboBox()
-        density.addItems(["Comfortable", "Compact"])
+        density.addItems(DENSITIES)
         density.setCurrentText(self.s.settings["density"])
         density.setAccessibleName("Layout density")
         self.setting_controls["density"] = density
         self.accent = self.s.settings["accent"]
         self.accent_button = button("Accent " + self.accent.upper(), self.pick_accent)
-        controls.addLayout(row(label("Dark theme"), density, self.accent_button, None))
+        controls.addLayout(row(theme_choice, density, self.accent_button, None))
         controls.addWidget(self.setting_toggle("animations", "Animate switches and notifications"))
         layout.addWidget(appearance)
 
@@ -1578,12 +1731,9 @@ class MainWindow(QMainWindow):
         for library_key, record in self.library_entries.items():
             if record.get("item") == key:
                 self.library_model.set_icon(library_key, glyph)
-        for recent_key, item_key in self.recent_items.items():
-            if item_key == key:
-                self.recent_model.set_icon(recent_key, glyph)
-        self.grid_rows = None
-        if self.library_views.currentIndex() == 1:
-            self.select_grid(self.library_model.rows, self.library_keys())
+        for index, (library_key, _) in enumerate(getattr(self, "grid_rows", None) or []):
+            if self.library_entries.get(library_key, {}).get("item") == key:
+                self.grid_model.item(index).setIcon(glyph)
         self.library_actions()
 
     def job_done(self, job, result):
@@ -1648,40 +1798,15 @@ class MainWindow(QMainWindow):
         self.queue_actions()
         self.refresh_library()
         self.refresh_history()
-        history = [record for record in self.s.history_rows() if record["action"] == "Install" and record["result"] == "Completed"]
+        self.dashboard.refresh(self.s.history_rows())
         health = self.s.health
-        queue = sum(item["status"] in {"Queued", "Downloading", "Paused"} for item in self.s.items.values())
-        for control, text in zip(self.stats, [str(health["mods"]) if health else "—", str(queue), str(len(history)),
-                                              size_label(health.get("storage"))]):
-            control.setText(text)
-        recent = []
-        self.recent_items = {}
-        self.recent_model.icons.clear()
-        for index, record in enumerate(history[:5]):
-            item_key = record["item"]
-            self.recent_items[str(index)] = item_key
-            if item_key in self.thumbnails:
-                self.recent_model.icons[str(index)] = QIcon(self.thumbnails[item_key])
-            item = self.s.items.get(record["item"], {})
-            recent.append((str(index), (record["name"], record["creator"] or "—",
-                                        item.get("category", "—"), record["result"], local_date(record["date"]))))
-        update_rows(self.recent, self.recent_model, recent)
-        self.recent_empty.setVisible(not recent)
-        self.recent.setVisible(bool(recent))
         if "scan" in self.s.jobs:
-            self.diagnostics.setText("Scanning folders and inspecting files…")
-            self.health_label.setText("Library health · scanning")
+            self.health_label.setText("Library scan in progress")
         elif health:
-            duplicates = health["duplicates"]
-            self.diagnostics.setText(
-                f"Missing required downloads: {health['dependencies']}  ·  Missing or unreadable files: {health['missing']}\n"
-                f"Identical copies: {duplicates if duplicates is not None else 'scan disabled'}  ·  Shared filenames: {health['collisions']}"
-            )
-            issues = health["dependencies"] + health["missing"] + (duplicates or 0) + health["collisions"]
-            self.health_label.setText(f"Library health · {issues} findings" if issues else "Library health · no scan findings")
+            findings = health["dependencies"] + health["missing"] + (health["duplicates"] or 0) + health["collisions"]
+            self.health_label.setText(f"{findings} library findings" if findings else "No scan findings")
         else:
-            self.diagnostics.setText("Run a library scan to check for missing files, required downloads, and duplicate content.")
-        self.releases.setEnabled("release" not in self.s.jobs)
+            self.health_label.setText("Library health · awaiting scan")
         if self.closing and not self.s.jobs and not self.s.active and not self.s.lookups:
             QTimer.singleShot(0, self.close)
 

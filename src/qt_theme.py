@@ -10,95 +10,101 @@ from PySide6.QtWidgets import (
     QStyle, QStyledItemDelegate, QStyleOptionProgressBar, QTableView, QVBoxLayout, QWidget,
 )
 
-ICONS = {
-    "brand": "M12 2 20 11 12 22 4 11Z M12 2 12 22 M4 11h16",
-    "home": "m3 10 9-7 9 7v10H3z M9 20v-6h6v6",
-    "queue": "M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4",
-    "library": "M3 4h4v16H3z M10 4h4v16h-4z M17 5l3-1 4 15-3 1z",
-    "history": "M3 12a9 9 0 1 1 3 7 M3 6v6h6M12 7v5l4 2",
-    "settings": "M4 6h16M4 12h16M4 18h16M8 4v4m8 2v4m-6 2v4",
-    "menu": "M4 6h16M4 12h16M4 18h16",
-    "link": "M10 14l4-4m-5 6-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m0 10a4 4 0 0 0 6 0l5-5a4 4 0 0 0-6-6l-2 2",
-    "folder": "M3 5h7l2 3h9v12H3z",
-    "refresh": "M20 11a8 8 0 1 0-2 7m2-13v6h-6",
-    "check": "m5 12 4 4L19 6",
-    "plus": "M12 5v14M5 12h14",
-    "search": "M15 15l5 5 M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z",
-    "console": "M3 5h18v14H3z M6 9l3 3-3 3 M12 15h5",
-    "sparkles": "m12 2 2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3L12 2z",
-}
+from functools import lru_cache
+import json
+
+from qt_tokens import ACCENT, ASSETS, DENSITIES, ERROR, INK, SUCCESS, WARNING, load_typeface, palette
+
+BRAND = '<path d="M19 5H8l-5 7 5 7h11M9 12h7l3 4M19 8l-3 4"/>'
+ICONS = json.loads((ASSETS / "lucide.json").read_text(encoding="utf-8"))
+ICONS["brand"] = BRAND
 
 
-def icon(name, color="#A2A8C4"):
-    path = ICONS[name]
-    data = QByteArray(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="{path}" fill="none" stroke="{color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>'.encode())
+@lru_cache(maxsize=128)
+def icon(name, color="#A8A5B2"):
+    drawing = ICONS[name]
+    data = QByteArray((
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+        f'<g fill="none" stroke="{color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+        f'{drawing}</g></svg>'
+    ).encode())
     renderer = QSvgRenderer(data)
-    pixmap = QPixmap(40, 40)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    renderer.render(painter)
-    painter.end()
-    pixmap.setDevicePixelRatio(2)
-    return QIcon(pixmap)
+    result = QIcon()
+    for scale in (1, 2, 3):
+        pixmap = QPixmap(24 * scale, 24 * scale)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
+        pixmap.setDevicePixelRatio(scale)
+        result.addPixmap(pixmap)
+    return result
 
 
-def theme(accent, compact=False):
-    density = "5px 9px" if compact else "8px 12px"
+def theme(accent=ACCENT, compact=False, name="Midnight"):
+    p = palette(name)
+    density = DENSITIES["Compact" if compact else "Comfortable"][1]
+    family = load_typeface()
     return f"""
-    * {{ font-family: 'Segoe UI'; font-size: 10pt; color: #F1F0FF; }}
-    QMainWindow, QWidget#workspace, QWidget#scrollViewport {{ background: #0C0D18; }}
-    QFrame#sidebar {{ background: #111322; border-right: 1px solid #253244; }}
-    QFrame#surface, QFrame#stat {{ background: #191C30; border: 1px solid #30334C; border-radius: 11px; }}
-    QFrame#stat {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #27233E, stop:1 #191C30); }}
-    QFrame#dashboardActions {{ background: #201D35; border: 1px solid #40365D; border-radius: 11px; }}
-    QLabel#metricIcon {{ background: #393051; border-radius: 8px; }}
-    QLabel#metricLabel {{ color: #E1DDF5; font-weight: 650; }}
-    QLabel#pageTitle {{ font-size: 27pt; font-weight: 700; color: #F5F2FF; }}
-    QPushButton#brandButton {{ font-size: 11pt; font-weight: 800; letter-spacing: 1px; color: #E1D6FF; border: none; background: transparent; text-align: left; }}
-    QPushButton#brandButton:hover {{ background: #292541; }}
-    QLabel#section {{ font-size: 13pt; font-weight: 650; }}
-    QLabel#statValue {{ font-size: 23pt; font-weight: 700; color: {accent}; }}
-    QLabel#secondary {{ color: #A2A8C4; }}
-    QLabel#positive {{ color: #52D6AC; }}
-    QLabel#eyebrow {{ color: #A2A8C4; font-size: 8pt; font-weight: 700; }}
+    * {{ font-family: '{family}'; font-size: 10pt; color: {p.text}; }}
+    QMainWindow, QWidget#workspace, QWidget#scrollViewport {{ background: {p.background}; }}
+    QFrame#sidebar {{ background: {p.sidebar}; border-right: 1px solid {p.border}; }}
+    QFrame#surface {{ background: {p.surface}; border: 1px solid {p.border}; border-radius: 8px; }}
+    QFrame#dashboardPanel {{ background: {p.surface}; border-top: 1px solid {p.border}; }}
+    QFrame#metricStrip {{ background: {p.surface}; border: 1px solid {p.border}; border-radius: 7px; }}
+    QLabel#pageTitle {{ font-size: 23pt; font-weight: 700; }}
+    QLabel#gameTitle {{ font-size: 32pt; font-weight: 750; color: #F7F4FF; }}
+    QLabel#heroCopy {{ color: #D4D0DE; }}
+    QLabel#section {{ font-size: 12pt; font-weight: 650; }}
+    QLabel#statValue {{ font-size: 19pt; font-weight: 700; }}
+    QLabel#secondary {{ color: {p.muted}; }}
+    QLabel#positive {{ color: {SUCCESS}; }}
+    QLabel#eyebrow {{ color: {p.muted}; font-size: 8pt; font-weight: 650; }}
+    QPushButton#brandButton {{ font-size: 10pt; font-weight: 750; color: {p.text}; border: 1px solid transparent; background: transparent; text-align: left; }}
+    QPushButton#brandButton:hover {{ background: {p.hover}; }}
     QPushButton, QToolButton, QComboBox, QSpinBox, QDateEdit {{
-        background: #23273C; border: 1px solid #30334C; border-radius: 8px; padding: {density};
+        background: {p.control}; border: 1px solid {p.border}; border-radius: 6px; padding: {density};
     }}
-    QPushButton:hover, QToolButton:hover {{ background: #303552; border-color: #7B6AB3; }}
+    QPushButton:hover, QToolButton:hover, QComboBox:hover {{ background: {p.hover}; }}
     QPushButton:focus, QToolButton:focus, QComboBox:focus, QSpinBox:focus, QDateEdit:focus,
     QLineEdit:focus, QPlainTextEdit:focus, QTableView:focus, QListView:focus {{ border: 1px solid {accent}; }}
-    QPushButton:disabled {{ color: #65778D; background: #191C30; }}
-    QPushButton[primary="true"] {{ background: {accent}; color: #0C0D18; font-weight: 700; border-color: {accent}; }}
-    QPushButton[primary="true"]:hover {{ background: #CAB9FF; }}
-    QPushButton[primary="true"]:disabled {{ color: #65778D; background: #191C30; border-color: #30334C; }}
-    QPushButton[nav="true"] {{ text-align: left; background: transparent; border: 1px solid transparent; padding: 10px 12px; }}
-    QPushButton[nav="true"]:hover {{ background: #23273C; }}
-    QPushButton[nav="true"]:checked {{ background: #292541; color: {accent}; border-color: #30334C; }}
+    QPushButton:disabled {{ color: {p.subdued}; background: {p.surface}; }}
+    QPushButton[primary="true"] {{ background: {accent}; color: {INK}; font-weight: 650; border-color: {accent}; }}
+    QPushButton[primary="true"]:hover {{ background: #D1C5FC; }}
+    QPushButton[primary="true"]:disabled {{ color: {p.subdued}; background: {p.surface}; border-color: {p.border}; }}
+    QPushButton[nav="true"] {{ text-align: left; background: transparent; border: 1px solid transparent; padding: 8px 9px; }}
+    QPushButton[nav="true"]:hover {{ background: {p.control}; }}
+    QPushButton[nav="true"]:checked {{ background: {p.selection}; color: {accent}; border-color: {p.border}; }}
     QPushButton[nav="true"]:focus {{ border-color: {accent}; }}
     QLineEdit, QPlainTextEdit, QTableView, QListView {{
-        background: #121526; border: 1px solid #30334C; border-radius: 8px;
-        selection-background-color: #514A83; selection-color: #F1F0FF;
+        background: {p.input}; border: 1px solid {p.border}; border-radius: 6px;
+        selection-background-color: {p.selection}; selection-color: {p.text};
     }}
     QLineEdit, QPlainTextEdit {{ padding: {density}; }}
-    QPlainTextEdit#activityConsole {{ background: #0A1019; color: #C8D6E5; font-family: 'Cascadia Mono', 'Consolas'; padding: 12px; }}
-    QHeaderView::section {{ background: #23273C; color: #C1C2DD; border: none; padding: 8px 6px; font-weight: 600; }}
-    QTableView {{ alternate-background-color: #191C30; gridline-color: #30334C; }}
+    QListWidget::item {{ padding: 7px; }}
+    QListView::item:selected, QTableView::item:selected {{ background: {p.selection}; color: {p.text}; }}
+    QPlainTextEdit#activityConsole {{ background: {p.input}; color: {p.text}; font-family: 'Cascadia Mono', 'Consolas'; padding: 12px; }}
+    QHeaderView::section {{ background: {p.control}; color: {p.muted}; border: none; padding: 7px 6px; font-weight: 650; }}
+    QTableView {{ alternate-background-color: {p.surface}; gridline-color: {p.border}; }}
     QScrollArea {{ border: none; background: transparent; }}
-    QScrollBar:vertical {{ background: #121526; width: 12px; margin: 0; }}
-    QScrollBar::handle:vertical {{ background: #505576; min-height: 24px; border-radius: 5px; }}
+    QScrollBar:vertical {{ background: {p.input}; width: 11px; margin: 0; }}
+    QScrollBar::handle:vertical {{ background: {p.subdued}; min-height: 24px; border-radius: 5px; }}
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
-    QScrollBar:horizontal {{ background: #121526; height: 12px; margin: 0; }}
-    QScrollBar::handle:horizontal {{ background: #505576; min-width: 24px; border-radius: 5px; }}
+    QScrollBar:horizontal {{ background: {p.input}; height: 11px; margin: 0; }}
+    QScrollBar::handle:horizontal {{ background: {p.subdued}; min-width: 24px; border-radius: 5px; }}
     QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
-    QSplitter::handle {{ background: #30334C; width: 3px; }}
-    QProgressBar {{ border: 1px solid #30334C; border-radius: 5px; background: #23273C; text-align: center; }}
-    QProgressBar::chunk {{ background: {accent}; border-radius: 4px; }}
-    QToolTip {{ background: #23273C; color: #F1F0FF; border: 1px solid #30334C; padding: 4px; }}
-    QMessageBox, QDialog, QMenu, QComboBox QAbstractItemView {{ background: #191C30; }}
-    QFrame#toast {{ border-radius: 8px; border: 1px solid #30334C; background: #191C30; }}
-    QFrame#toast[level="success"] {{ border-color: #52D6AC; }}
-    QFrame#toast[level="warning"] {{ border-color: #F5BC68; }}
-    QFrame#toast[level="error"] {{ border-color: #F17878; }}
+    QSplitter::handle {{ background: {p.border}; width: 3px; }}
+    QProgressBar {{ border: 1px solid {p.border}; border-radius: 4px; background: {p.control}; text-align: center; }}
+    QProgressBar::chunk {{ background: {accent}; border-radius: 3px; }}
+    QToolTip {{ background: {p.control}; color: {p.text}; border: 1px solid {p.border}; padding: 4px; }}
+    QMessageBox, QDialog, QMenu, QComboBox QAbstractItemView {{ background: {p.surface}; }}
+    QMenu::item {{ padding: 6px 20px; }}
+    QMenu::item:selected {{ background: {p.selection}; }}
+    QMenu::item:disabled {{ color: {p.subdued}; }}
+    QFrame#toast {{ border-radius: 6px; border: 1px solid {p.border}; background: {p.surface}; }}
+    QFrame#toast[level="success"] {{ border-color: {SUCCESS}; }}
+    QFrame#toast[level="warning"] {{ border-color: {WARNING}; }}
+    QFrame#toast[level="error"] {{ border-color: {ERROR}; }}
     """
 
 
@@ -114,7 +120,7 @@ def button(text, action, primary=False, glyph=None):
     control = QPushButton(text)
     control.setProperty("primary", primary)
     if glyph:
-        control.setIcon(icon(glyph, "#0C0D18" if primary else "#A2A8C4"))
+        control.setIcon(icon(glyph, INK if primary else "#A8A5B2"))
     control.clicked.connect(action)
     return control
 
@@ -159,7 +165,8 @@ class ToggleSwitch(QCheckBox):
         super().__init__(text)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
-        self.accent = QColor("#A996FF")
+        self.accent = QColor(ACCENT)
+        self.colors = palette("Midnight")
         self.animate_changes = True
         self.slide = QVariantAnimation(self)
         self.slide.setDuration(150)
@@ -167,8 +174,9 @@ class ToggleSwitch(QCheckBox):
         self.slide.valueChanged.connect(self.update)
         self.clicked.connect(self.animate_toggle)
 
-    def set_appearance(self, accent, animate):
+    def set_appearance(self, accent, animate, colors):
         self.accent = QColor(accent)
+        self.colors = colors
         self.animate_changes = animate
         if not animate:
             self.slide.stop()
@@ -210,13 +218,13 @@ class ToggleSwitch(QCheckBox):
         if not left_to_right:
             position = 1.0 - position
 
-        track_color = self.accent if checked else QColor("#30354C")
-        outline = self.accent if checked or self.underMouse() else QColor("#717897")
-        thumb = QColor("#17152A" if checked else "#F1F0FF")
+        track_color = self.accent if checked else QColor(self.colors.hover)
+        outline = self.accent if checked or self.underMouse() else QColor(self.colors.subdued)
+        thumb = QColor(INK if checked else self.colors.text)
         if not self.isEnabled():
-            track_color = QColor("#2A2D40")
-            outline = QColor("#484D65")
-            thumb = QColor("#858BA6")
+            track_color = QColor(self.colors.control)
+            outline = QColor(self.colors.border)
+            thumb = QColor(self.colors.subdued)
 
         if self.hasFocus():
             painter.setPen(QPen(self.accent, 1))
@@ -233,7 +241,7 @@ class ToggleSwitch(QCheckBox):
         text_bounds = QRect(label_offset, 0, max(0, self.width() - label_offset), self.height())
         text_bounds = QStyle.visualRect(self.layoutDirection(), self.rect(), text_bounds)
         alignment = Qt.AlignmentFlag.AlignLeft if left_to_right else Qt.AlignmentFlag.AlignRight
-        painter.setPen(QColor("#F1F0FF" if self.isEnabled() else "#858BA6"))
+        painter.setPen(QColor(self.colors.text if self.isEnabled() else self.colors.subdued))
         painter.drawText(text_bounds, alignment | Qt.AlignmentFlag.AlignVCenter, self.text())
 
 
@@ -271,11 +279,11 @@ class Rows(QAbstractTableModel):
             return str(value[0] if isinstance(value, tuple) else value)
         if role == Qt.ItemDataRole.ForegroundRole:
             if value in ("Completed", "Enabled", "Downloaded"):
-                return QColor("#52D6AC")
+                return QColor(SUCCESS)
             if value in ("Failed", "Missing"):
-                return QColor("#F17878")
+                return QColor(ERROR)
             if value in ("Requires attention", "Paused", "Disabled", "Partial"):
-                return QColor("#F5BC68")
+                return QColor(WARNING)
 
     def replace(self, rows):
         self.beginResetModel()
