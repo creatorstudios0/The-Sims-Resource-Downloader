@@ -113,6 +113,9 @@ def test_patch_day_keeps_warning_until_player_reviews(tmp_path, qtbot, monkeypat
     (mods / "gameplay.ts4script").write_bytes(b"script")
     (mods / "outfit.ts4script.package").write_bytes(b"package")
     (mods / "disabled.ts4script.disabled").write_bytes(b"script")
+    downloaded = tmp_path / "downloaded.ts4script"
+    downloaded.write_bytes(b"download")
+    service.items["download"] = dict(name=downloaded.name, path=str(downloaded), status="Complete")
     window.review_script_mods()
     assert window.search.text() == ".ts4script"
     qtbot.waitUntil(lambda: "scan" not in service.jobs)

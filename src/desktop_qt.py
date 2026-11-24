@@ -404,6 +404,7 @@ class MainWindow(QMainWindow):
     def review_script_mods(self):
         self.go(2)
         self.clear_library_filters()
+        self.state_filter.setCurrentText("Installed")
         self.search.setText(".ts4script")
         self.search.setFocus()
         self.s.scan()
