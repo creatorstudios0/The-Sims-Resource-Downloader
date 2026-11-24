@@ -11,6 +11,9 @@ import zipfile
 from download_organizer import MOD_EXTENSIONS, TRAY_EXTENSIONS
 
 SUPPORTED = MOD_EXTENSIONS | TRAY_EXTENSIONS
+MAX_ARCHIVE_FILES = 10_000
+MAX_ARCHIVE_FILE_BYTES = 1_000_000_000
+MAX_ARCHIVE_TOTAL_BYTES = 2_000_000_000
 
 
 def digest(path):
@@ -36,6 +39,12 @@ def install_plan(source, game, mods=None):
                 for entry in archive.infolist()
                 if not entry.is_dir() and Path(entry.filename).suffix.lower() in SUPPORTED
             ]
+        if len(members) > MAX_ARCHIVE_FILES:
+            raise ValueError("Archive contains too many supported Sims 4 files.")
+        if any(size > MAX_ARCHIVE_FILE_BYTES for _, size in members):
+            raise ValueError("Archive contains a supported file that is too large to install.")
+        if sum(size for _, size in members) > MAX_ARCHIVE_TOTAL_BYTES:
+            raise ValueError("Archive contains too much supported content to install safely.")
     elif source.suffix.lower() in SUPPORTED:
         members = [(None, source.stat().st_size)]
     else:
