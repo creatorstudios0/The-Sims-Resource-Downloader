@@ -550,6 +550,52 @@ def test_scanned_mod_keeps_saved_memberships_when_toggled(app_state, qtbot, tmp_
         assert saved["collections"]["Family"] == [key]
 
 
+def test_quarantine_uses_the_file_in_the_confirmation(app_state, qtbot, tmp_path):
+    service, window = app_state
+    service.state["game"] = str(tmp_path)
+    mods = tmp_path / "Mods"
+    mods.mkdir()
+    first = mods / "A.package"
+    second = mods / "B.package"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    service.scan()
+    qtbot.waitUntil(lambda: not service.jobs)
+    window.go(2)
+    window.library_list.selectRow(0)
+
+    def confirm(_title, message):
+        assert first.name in message
+        window.library_list.selectRow(1)
+        return True
+
+    window.confirm = confirm
+    window.toggle_library()
+    qtbot.waitUntil(lambda: not service.jobs)
+
+    assert first.with_suffix(".package.disabled").is_file()
+    assert second.is_file()
+
+
+def test_scanned_mod_cannot_be_quarantined_during_a_backup(app_state, qtbot, tmp_path):
+    service, _ = app_state
+    service.state["game"] = str(tmp_path)
+    mods = tmp_path / "Mods"
+    mods.mkdir()
+    mod = mods / "A.package"
+    mod.write_bytes(b"mod")
+    service.scan()
+    qtbot.waitUntil(lambda: not service.jobs)
+
+    service.jobs.add("content-backup")
+    try:
+        with pytest.raises(ValueError, match="active file operations"):
+            service.toggle_scanned(next(iter(service.disk)))
+        assert mod.is_file()
+    finally:
+        service.jobs.discard("content-backup")
+
+
 @pytest.mark.parametrize("kind", ["profile", "collection"])
 def test_can_add_selection_to_another_group_while_filtering(app_state, qtbot, tmp_path, monkeypatch, kind):
     service, window = app_state
