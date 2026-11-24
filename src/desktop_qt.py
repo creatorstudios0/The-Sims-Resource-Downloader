@@ -22,7 +22,10 @@ from qt_services import (
     BUSY, DATA_DIR, LABELS, LOOKUP, RELEASES, STATE_PATH, VERSION, WAITING,
     LibraryService, failure_message, release_info, settings_defaults, size_label,
 )
-from qt_theme import ProgressPainter, button, icon, label, row, scroll_area, selected, surface, table, theme, update_rows
+from qt_theme import (
+    ProgressPainter, ToggleSwitch, button, icon, label, row, scroll_area, selected, surface, table,
+    theme, update_rows,
+)
 from sims_install import installed_path, MOD_EXTENSIONS
 from desktop_data import fetch_thumbnail
 from library_insights import audit_to_file, format_summary
@@ -300,7 +303,11 @@ class MainWindow(QMainWindow):
 
     def apply_theme(self):
         compact = self.s.settings["density"] == "Compact"
-        QApplication.instance().setStyleSheet(theme(self.s.settings["accent"], compact))
+        accent = self.s.settings["accent"]
+        QApplication.instance().setStyleSheet(theme(accent, compact))
+        animate = self.s.settings["animations"] and not os.environ.get("QT_REDUCED_MOTION")
+        for control in self.findChildren(ToggleSwitch):
+            control.set_appearance(accent, animate)
         for view in (self.queue_view, self.library_list, self.history_view, self.recent, self.discover.results):
             view.verticalHeader().setDefaultSectionSize(29 if compact else 36)
 
@@ -339,73 +346,101 @@ class MainWindow(QMainWindow):
 
     def dashboard_page(self):
         page, layout = page_layout()
-        cards = QGridLayout()
+        layout.setContentsMargins(0, 0, 4, 4)
+        layout.setSpacing(14)
+
+        metrics = QGridLayout()
+        metrics.setHorizontalSpacing(10)
         self.stats = []
-        for index, (name, detail) in enumerate((
-            ("Installed mods", "Package and script files"), ("Download queue", "Waiting and active items"),
-            ("Completed installs", "Successful install batches"), ("Library storage", "Installed content on disk"),
+        for column, (name, detail, glyph) in enumerate((
+            ("Installed mods", "Package and script files", "library"),
+            ("Download queue", "Waiting and active items", "queue"),
+            ("Completed installs", "Successful install batches", "history"),
+            ("Library storage", "Installed content on disk", "folder"),
         )):
-            frame, contents = surface("stat")
-            contents.addWidget(label(name, "secondary", True))
+            card, contents = surface("stat")
+            contents.setSpacing(5)
+            badge = label("", "metricIcon")
+            badge.setFixedSize(30, 30)
+            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            badge.setPixmap(icon(glyph, "#D5C8FF").pixmap(QSize(17, 17)))
+            contents.addLayout(row(badge, None))
+            contents.addWidget(label(name, "metricLabel", True))
             value = label("—", "statValue")
             contents.addWidget(value)
             contents.addWidget(label(detail, "secondary", True))
-            cards.addWidget(frame, 0, index)
-            cards.setColumnStretch(index, 1)
+            contents.addStretch()
+            metrics.addWidget(card, 0, column)
+            metrics.setColumnStretch(column, 1)
             self.stats.append(value)
-        layout.addLayout(cards)
-        spotlight, hero = surface("hero")
-        hero.addWidget(label("YOUR CREATIVE SPACE", "eyebrow"))
-        hero.addWidget(label("Everything your Sims world needs, in one place.", "heroTitle", True))
-        hero.addWidget(label("Find new content, manage your collection, and keep your game organized — powered by CreatorStudios.", "secondary", True))
-        hero.addLayout(row(button("Explore content", lambda: self.go(4), True, "search"),
-                           button("View my library", lambda: self.go(2), glyph="library"),
-                           button("Run health scan", self.s.scan, glyph="refresh"),
-                           button("Export mod audit", self.export_audit, glyph="folder"), None))
-        layout.addWidget(spotlight)
-        quick, controls = surface()
-        controls.addWidget(label("Quick actions", "section"))
-        controls.addLayout(row(button("Discover content", lambda: self.go(4), True, "search"),
-                               button("Import files", self.add_files, glyph="plus"),
-                               button("Refresh Library", self.s.scan, glyph="refresh"), None))
+        layout.addLayout(metrics)
+
+        quick, controls = surface("dashboardActions")
+        controls.addLayout(row(
+            label("Quick actions", "section"), None,
+            button("Discover content", lambda: self.go(4), True, "search"),
+            button("Import files", self.add_files, glyph="plus"),
+            button("View library", lambda: self.go(2), glyph="library"),
+        ))
         layout.addWidget(quick)
+
+        health, contents = surface()
+        contents.addLayout(row(
+            label("Library health", "section"), None,
+            button("Scan library", self.s.scan, glyph="refresh"),
+            button("Export mod audit", self.export_audit, glyph="folder"),
+        ))
+        self.diagnostics = label("", "secondary", True)
+        contents.addWidget(self.diagnostics)
+        layout.addWidget(health)
+
+        maintenance = QGridLayout()
+        maintenance.setHorizontalSpacing(12)
+        maintenance.setColumnStretch(0, 1)
+        maintenance.setColumnStretch(1, 1)
 
         patch, controls = surface()
         controls.addWidget(label("Patch Day Checkup", "section"))
         self.patch_summary = label("", "secondary", True)
         controls.addWidget(self.patch_summary)
+        controls.addStretch()
         self.patch_check = button("Check game version", self.s.check_patch, glyph="refresh")
         self.patch_reviewed = button("Mark reviewed", self.s.mark_patch_reviewed, glyph="check")
         advice = "https://help.ea.com/en/articles/the-sims/the-sims-4/mods-and-the-sims-4-game-updates/"
-        controls.addLayout(row(self.patch_check, button("Review script mods", self.review_script_mods),
-                               self.patch_reviewed, button("EA patch guide", lambda: QDesktopServices.openUrl(QUrl(advice))), None))
-        layout.addWidget(patch)
+        patch_actions = QGridLayout()
+        patch_actions.addWidget(self.patch_check, 0, 0)
+        patch_actions.addWidget(button("Review script mods", self.review_script_mods), 0, 1)
+        patch_actions.addWidget(self.patch_reviewed, 1, 0)
+        patch_actions.addWidget(button("EA patch guide", lambda: QDesktopServices.openUrl(QUrl(advice))), 1, 1)
+        controls.addLayout(patch_actions)
+        maintenance.addWidget(patch, 0, 0)
 
         backup, controls = surface()
         controls.addWidget(label("Mods and Tray backups", "section"))
         self.backup_summary = label("", "secondary", True)
         self.backup_summary.setTextFormat(Qt.TextFormat.PlainText)
         controls.addWidget(self.backup_summary)
+        controls.addStretch()
         self.backup_create = button("Create backup ZIP", self.create_content_backup, True, "plus")
         self.backup_open = button("Open last backup", self.open_content_backup, glyph="folder")
-        controls.addLayout(row(self.backup_create, self.backup_open, None))
-        layout.addWidget(backup)
+        controls.addWidget(self.backup_create, alignment=Qt.AlignmentFlag.AlignLeft)
+        controls.addWidget(self.backup_open, alignment=Qt.AlignmentFlag.AlignLeft)
+        maintenance.addWidget(backup, 0, 1)
+        layout.addLayout(maintenance)
+
         recent, contents = surface()
-        contents.addWidget(label("Recently installed", "section"))
-        self.recent_empty = label("No installations have been recorded yet.", "secondary")
+        contents.addLayout(row(
+            label("Recently installed", "section"), None,
+            button("View install history", lambda: self.go(3), glyph="history"),
+        ))
+        self.recent_empty = label("No installations have been recorded yet.", "secondary", True)
         contents.addWidget(self.recent_empty)
-        self.recent, self.recent_model = table(["Mod", "Creator", "Category", "Status", "Installed"], [165, 117, 133, 96])
+        self.recent, self.recent_model = table(["Mod", "Creator", "Category", "Status", "Installed"], [165, 117, 110, 90])
         self.recent.setMinimumHeight(155)
         contents.addWidget(self.recent)
         layout.addWidget(recent)
-        health, contents = surface()
-        contents.addLayout(row(label("Library health", "section"), None, button("Scan library", self.s.scan, glyph="refresh")))
-        self.diagnostics = label("", "secondary", True)
-        contents.addWidget(self.diagnostics)
-        layout.addWidget(health)
         layout.addStretch()
         return scroll_area(page)
-
 
     def review_script_mods(self):
         self.go(2)
@@ -499,7 +534,7 @@ class MainWindow(QMainWindow):
         self.links.setAccessibleName("The Sims Resource links")
         self.links.setFixedHeight(63)
         form.addWidget(self.links)
-        self.clipboard_toggle = QCheckBox("Watch clipboard")
+        self.clipboard_toggle = ToggleSwitch("Watch clipboard")
         self.clipboard_toggle.setChecked(self.s.settings["watch"])
         self.clipboard_toggle.toggled.connect(self.toggle_clipboard)
         form.addLayout(row(button("Review links", self.review_links, True, "link"), self.clipboard_toggle, None))
@@ -1302,7 +1337,7 @@ class MainWindow(QMainWindow):
         self.accent = self.s.settings["accent"]
         self.accent_button = button("Accent " + self.accent.upper(), self.pick_accent)
         controls.addLayout(row(label("Dark theme"), density, self.accent_button, None))
-        controls.addWidget(self.setting_toggle("animations", "Animate notifications"))
+        controls.addWidget(self.setting_toggle("animations", "Animate switches and notifications"))
         layout.addWidget(appearance)
 
         app, controls = surface()
@@ -1387,7 +1422,7 @@ class MainWindow(QMainWindow):
             self.s.job("preview:" + key, self.s.install_preview, key)
 
     def setting_toggle(self, key, name):
-        control = QCheckBox(name)
+        control = ToggleSwitch(name)
         control.setChecked(self.s.settings[key])
         self.setting_controls[key] = control
         return control
