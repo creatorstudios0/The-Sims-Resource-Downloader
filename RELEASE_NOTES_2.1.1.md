@@ -8,7 +8,7 @@ This release includes Sims 4 Mod Library 2.1.1 for 64-bit Windows and the portab
 - Settings and the Download Queue clipboard watcher use sliding on/off switches. The controls support keyboard input and respect reduced motion.
 - Discover keeps the current results if loading another page fails, so you can retry.
 - Patch Day refreshes the library before reviewing script mods and matches the script file extension exactly.
-- The app can open when optional backup metadata is malformed. Content backups also skip linked Mods or Tray roots.
+- The app can open when optional backup metadata is malformed. Content backups ask you to select the real folder if Mods or Tray points to a filesystem link.
 
 ## Upgrade
 
