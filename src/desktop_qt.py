@@ -592,17 +592,26 @@ class MainWindow(QMainWindow):
         if keys and self.confirm("Cancel downloads", f"Cancel {len(keys)} item(s)? Partial files will be kept."):
             self.s.cancel(keys)
 
+    def can_remove_download(self, key):
+        item = self.s.items.get(key)
+        return item is not None and item["status"] not in BUSY and key not in self.s.lookups
+
     def remove_selected(self):
-        keys = [key for key in self.queue_keys() if self.s.items[key]["status"] not in BUSY and key not in self.s.lookups]
+        keys = [key for key in self.queue_keys() if self.can_remove_download(key)]
         if keys and self.confirm("Remove downloads", f"Remove {len(keys)} item(s) from the queue?"):
-            for key in keys:
+            # A queued transfer can start while the confirmation dialog is open.
+            removable = [key for key in keys if self.can_remove_download(key)]
+            for key in removable:
                 if self.s.items[key]["status"] == "Complete":
                     if key not in self.s.state["queueHidden"]:
                         self.s.state["queueHidden"].append(key)
                 else:
                     self.website_previews.discard(key)
                     del self.s.items[key]
-            self.s.publish()
+            if removable:
+                self.s.publish()
+            if len(removable) < len(keys):
+                self.inform("The queue changed. Only downloads still eligible for removal were removed.", "warning")
 
     def clear_completed(self):
         hidden = set(self.s.state["queueHidden"])
@@ -672,7 +681,7 @@ class MainWindow(QMainWindow):
         self.download_button.setEnabled(bool(states & WAITING))
         self.retry_button.setEnabled(bool(states & (LOOKUP | {"Paused", "Cancelled", "Download failed"})))
         self.cancel_button.setEnabled(bool(states & (WAITING | {"Downloading"})))
-        self.remove_button.setEnabled(any(self.s.items[key]["status"] not in BUSY and key not in self.s.lookups for key in keys))
+        self.remove_button.setEnabled(any(self.can_remove_download(key) for key in keys))
         self.dependency_button.setEnabled(len(keys) == 1 and self.s.items[keys[0]].get("source") != "CurseForge")
         self.clear_button.setEnabled(any(self.s.items[key]["status"] == "Complete" for key in self.queue_model.indices))
         self.pause_button.setText("Resume queue" if self.s.paused else "Pause queue")

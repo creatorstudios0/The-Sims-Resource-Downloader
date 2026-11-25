@@ -1,3 +1,4 @@
+from concurrent.futures import Future
 import json
 import logging
 from pathlib import Path
@@ -127,6 +128,42 @@ def test_import_dependencies_progress_retry_and_pause(app_state, qtbot, monkeypa
     service.retry(["123"])
     qtbot.waitUntil(lambda: service.items["123"]["status"] == "Complete")
     assert not service.paused
+
+
+
+def test_remove_selected_keeps_download_that_starts_during_confirmation(app_state, monkeypatch):
+    service, window = app_state
+    service.import_text(f"{URL} {URL[:-3]}124 {URL[:-3]}125", lookup=False)
+    service.settings["workers"] = 1
+    monkeypatch.setattr(service, "submit", Mock())
+    service.queue(["123", "124", "125"])
+    window.go(1)
+    selection = window.queue_view.selectionModel()
+    flags = selection.SelectionFlag.Select | selection.SelectionFlag.Rows
+    for key in ("124", "125"):
+        selection.select(window.queue_model.index(window.queue_model.indices[key], 0), flags)
+
+    failed = Future()
+    failed.set_exception(PermissionError())
+
+    def confirm_removal(*_):
+        assert service.items["124"]["status"] == "Queued"
+        service.finish("download", "123", failed)
+        assert service.items["124"]["status"] == "Downloading"
+        return True
+
+    with monkeypatch.context() as modal:
+        modal.setattr(window, "confirm", confirm_removal)
+        try:
+            window.remove_selected()
+            assert "124" in service.items
+            assert "125" not in service.items
+
+            service.finish("download", "124", failed)
+            assert service.items["124"]["status"] == "Download failed"
+            assert not service.active
+        finally:
+            service.active.clear()
 
 
 def test_cancel_and_close(app_state, qtbot, monkeypatch):
