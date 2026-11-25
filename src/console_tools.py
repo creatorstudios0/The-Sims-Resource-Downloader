@@ -15,6 +15,12 @@ PROJECT = Path(__file__).resolve().parent.parent
 
 
 def default_game():
+    if sys.platform == "win32":
+        from windows_folders import detect_game
+
+        if (detected := detect_game()) is not None:
+            return detected
+
     home = Path.home()
     candidates = [
         home / "Documents" / "Electronic Arts" / "The Sims 4",

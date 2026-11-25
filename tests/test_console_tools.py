@@ -1,11 +1,33 @@
 """Console tools run without a TSR account or network."""
+import json
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from tempfile import TemporaryDirectory
 import unittest
 
-from console_tools import diagnostics, queue_info, resolved_download_folder, build_parser
+import pytest
+
+from console_tools import diagnostics, queue_info, resolved_download_folder, build_parser, main
+
+
+def test_audit_finds_game_in_redirected_windows_documents(tmp_path, monkeypatch):
+    if sys.platform != "win32":
+        pytest.skip("Windows Documents redirection")
+    import windows_folders
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+    documents = tmp_path / "redirected" / "Documents"
+    monkeypatch.setattr(windows_folders, "known_folder", lambda key, fallback: documents)
+    mods = documents / "Electronic Arts" / "The Sims 4" / "Mods"
+    mods.mkdir(parents=True)
+    (mods / "test.package").write_bytes(b"test mod")
+    output = tmp_path / "audit.json"
+
+    assert main(["audit", "--output", str(output)]) == 0
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["roots"]["Mods"] == str(mods)
+    assert report["total_files"] == 1
 
 
 class ConsoleToolsTests(unittest.TestCase):
