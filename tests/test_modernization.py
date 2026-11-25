@@ -9,7 +9,7 @@ import zipfile
 
 import pytest
 from PySide6.QtCore import QAbstractAnimation, QPoint, Qt
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QDialog, QMessageBox, QTableView
 
 import qt_services
 import curseforge
@@ -393,6 +393,36 @@ def test_profile_backup_recovers_corrupt_state(tmp_path, qtbot, monkeypatch):
     recovered.shutdown()
 
 
+def test_profile_backup_restore_resets_library_group_filters(app_state, qtbot, tmp_path, monkeypatch):
+    service, window = app_state
+    files = [tmp_path / name for name in ("first.package", "second.package")]
+    for path in files:
+        path.write_bytes(b"package")
+    service.add_local(files)
+    first = next(iter(service.items))
+    service.profiles["Favorites"] = [first]
+    service.collections["Family"] = [first]
+    service.publish()
+    snapshot = service.backups.snapshots()[0]
+    window.profile_control.setCurrentText("Favorites")
+    window.collection_control.setCurrentText("Family")
+    assert window.library_model.rowCount() == 1
+
+    def choose_snapshot(dialog):
+        dialog.findChild(QTableView).selectRow(0)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(service.backups, "snapshots", lambda: [snapshot])
+    monkeypatch.setattr(QDialog, "exec", choose_snapshot)
+    monkeypatch.setattr(window, "confirm", lambda *_: True)
+    window.profile_backups()
+    qtbot.waitUntil(lambda: not service.jobs)
+
+    assert window.profile_control.currentText() == "All profiles"
+    assert window.collection_control.currentText() == "All collections"
+    assert window.library_model.rowCount() == 2
+
+
 def test_migration_preserves_classic_data(tmp_path, qapp, monkeypatch):
     monkeypatch.setattr(qt_services, "detect_game", lambda: None)
     location = tmp_path / "desktop-state.json"
@@ -581,6 +611,25 @@ def test_activity_filters_and_popup_preference(app_state):
     assert window.notifications.entries[0][2] == "A dependency needs attention"
     assert not window.toast_frame.isVisible()
 
+
+
+def test_activity_retains_complete_multiline_events(app_state):
+    _, window = app_state
+    console = window.activity_console
+    console.clear()
+    console.append("INFO", "Oldest event")
+    console.append("ERROR", "Error heading\r\nError detail")
+    for index in range(console.entries.maxlen - 2):
+        console.append("INFO", f"Event {index}")
+
+    assert console.output.toPlainText().startswith("Oldest event\nError heading\nError detail\n")
+    console.append("INFO", "Newest event")
+    assert console.output.toPlainText().startswith("Error heading\nError detail\n")
+    console.level.setCurrentText("Error")
+    assert console.output.toPlainText() == "Error heading\nError detail"
+    console.level.setCurrentText("All levels")
+    console.append("INFO", "Another event")
+    assert "Error detail" not in console.output.toPlainText()
 
 
 def test_scanned_mod_keeps_saved_memberships_when_toggled(app_state, qtbot, tmp_path):
