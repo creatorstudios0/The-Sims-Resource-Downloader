@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QDialog, QMessageBox, QTableView
 
 import qt_services
 import curseforge
+import sims_install
 from desktop_qt import MainWindow
 from desktop_data import parse_url
 from qt_services import LibraryService, scan_files
@@ -354,6 +355,61 @@ def test_discover_can_retry_failed_page_without_losing_results(app_state, qtbot,
     page.next.click()
     qtbot.waitUntil(page.previous.isEnabled)
     assert page.model.rows[0][1][0] == f"Dress {curseforge.PAGE_SIZE + 1}"
+
+
+def test_discover_pagination_uses_the_current_api_key(app_state, qtbot, monkeypatch):
+    _, window = app_state
+    page = window.discover
+    search = Mock(return_value=([{"id": 1, "name": "Dress"}], curseforge.PAGE_SIZE + 1))
+    monkeypatch.setattr(curseforge, "search", search)
+    page.api_key.setText("old-key")
+    page.search_box.setText("dress")
+    page.search()
+    qtbot.waitUntil(page.next.isEnabled)
+
+    page.api_key.clear()
+    page.search_box.setText("shirt")
+    page.next.click()
+    assert page.status.text() == "Enter a CurseForge API key first."
+    assert page.model.rowCount() == 1
+    search.assert_called_once_with("old-key", "dress", 0)
+
+    page.api_key.setText("new-key")
+    page.next.click()
+    qtbot.waitUntil(page.previous.isEnabled)
+    search.assert_called_with("new-key", "dress", curseforge.PAGE_SIZE)
+
+
+@pytest.mark.parametrize("suffix", ["", ".disabled"])
+@pytest.mark.parametrize("during_copy", [False, True])
+def test_install_skips_conflicts_that_appeared_after_preview(tmp_path, monkeypatch, suffix, during_copy):
+    archive = tmp_path / "download.zip"
+    with zipfile.ZipFile(archive, "w") as content:
+        content.writestr("conflict.package", b"download")
+        content.writestr("new.package", b"new mod")
+    plan = sims_install.install_plan(archive, tmp_path)
+    assert all(not conflict for _, _, _, conflict in plan)
+
+    mods = tmp_path / "Mods"
+    mods.mkdir()
+    existing = mods / f"conflict.package{suffix}"
+    if during_copy:
+        digest = sims_install.digest
+
+        def insert_conflict(path):
+            existing.write_bytes(b"existing mod")
+            return digest(path)
+
+        monkeypatch.setattr(sims_install, "digest", insert_conflict)
+    else:
+        existing.write_bytes(b"existing mod")
+
+    installed = sims_install.install(archive, plan)
+
+    assert [Path(record["path"]).name for record in installed] == ["new.package"]
+    assert (mods / "new.package").read_bytes() == b"new mod"
+    assert existing.read_bytes() == b"existing mod"
+    assert {path.name for path in mods.iterdir()} == {existing.name, "new.package"}
 
 
 def test_tsr_discover_downloads_and_installs(app_state, qtbot, tmp_path, monkeypatch):

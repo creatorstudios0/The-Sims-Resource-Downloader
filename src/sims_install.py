@@ -25,6 +25,10 @@ def validate_filename(name):
         raise ValueError(f"Invalid Windows filename: {name}")
 
 
+def destination_occupied(target):
+    return os.path.lexists(target) or os.path.lexists(target.with_name(target.name + ".disabled"))
+
+
 def install_plan(source, game, mods=None):
     source, game = Path(source), Path(game)
     if not game.is_dir():
@@ -53,7 +57,7 @@ def install_plan(source, game, mods=None):
         if target.parent.resolve() != root:
             raise ValueError(f"Game subfolder points outside the selected folder: {folder}")
         key = str(target).casefold()
-        conflict = key in seen or os.path.lexists(target) or os.path.lexists(target.with_name(name + ".disabled"))
+        conflict = key in seen or destination_occupied(target)
         seen.add(key)
         plan.append((member, target, size, conflict))
     return plan
@@ -69,6 +73,8 @@ def install(source, plan):
                     continue
                 if target.parent.resolve() != target.parent.absolute():
                     raise ValueError(f"Game subfolder changed: {target.parent}")
+                if destination_occupied(target):
+                    continue
                 target.parent.mkdir(exist_ok=True)
                 temporary = None
                 try:
@@ -79,10 +85,15 @@ def install(source, plan):
                             if output.tell() != size:
                                 raise OSError(f"Incomplete copy: {target.name}")
                     signature = digest(temporary)
-                    if os.name == "nt":
-                        temporary.rename(target)
-                    else:
-                        os.link(temporary, target)
+                    if destination_occupied(target):
+                        continue
+                    try:
+                        if os.name == "nt":
+                            temporary.rename(target)
+                        else:
+                            os.link(temporary, target)
+                    except FileExistsError:
+                        continue
                     installed.append({"path": str(target), "hash": signature, "disabled": False})
                 finally:
                     if temporary:
