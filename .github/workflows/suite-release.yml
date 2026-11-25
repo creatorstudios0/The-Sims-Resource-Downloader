@@ -9,9 +9,13 @@ on:
     branches:
       - main
 
-# Only one release job may publish this version at a time.
+# PR checks share a group only with newer runs for the same PR.
+# Only pushes to main can publish, so keep those runs serialized.
 concurrency:
-  group: creatorstudios-suite-2-2-0-release
+  group: >-
+    ${{ github.event_name == 'push' && 'creatorstudios-suite-2-2-0-release'
+        || format('creatorstudios-suite-2-2-0-{0}-{1}', github.event_name,
+                  github.event.pull_request.number || github.run_id) }}
   cancel-in-progress: false
 
 permissions:
