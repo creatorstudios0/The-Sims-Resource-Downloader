@@ -592,17 +592,26 @@ class MainWindow(QMainWindow):
         if keys and self.confirm("Cancel downloads", f"Cancel {len(keys)} item(s)? Partial files will be kept."):
             self.s.cancel(keys)
 
+    def can_remove_download(self, key):
+        item = self.s.items.get(key)
+        return item is not None and item["status"] not in BUSY and key not in self.s.lookups
+
     def remove_selected(self):
-        keys = [key for key in self.queue_keys() if self.s.items[key]["status"] not in BUSY and key not in self.s.lookups]
+        keys = [key for key in self.queue_keys() if self.can_remove_download(key)]
         if keys and self.confirm("Remove downloads", f"Remove {len(keys)} item(s) from the queue?"):
-            for key in keys:
+            # A queued transfer can start while the confirmation dialog is open.
+            removable = [key for key in keys if self.can_remove_download(key)]
+            for key in removable:
                 if self.s.items[key]["status"] == "Complete":
                     if key not in self.s.state["queueHidden"]:
                         self.s.state["queueHidden"].append(key)
                 else:
                     self.website_previews.discard(key)
                     del self.s.items[key]
-            self.s.publish()
+            if removable:
+                self.s.publish()
+            if len(removable) < len(keys):
+                self.inform("The queue changed. Only downloads still eligible for removal were removed.", "warning")
 
     def clear_completed(self):
         hidden = set(self.s.state["queueHidden"])
@@ -672,7 +681,7 @@ class MainWindow(QMainWindow):
         self.download_button.setEnabled(bool(states & WAITING))
         self.retry_button.setEnabled(bool(states & (LOOKUP | {"Paused", "Cancelled", "Download failed"})))
         self.cancel_button.setEnabled(bool(states & (WAITING | {"Downloading"})))
-        self.remove_button.setEnabled(any(self.s.items[key]["status"] not in BUSY and key not in self.s.lookups for key in keys))
+        self.remove_button.setEnabled(any(self.can_remove_download(key) for key in keys))
         self.dependency_button.setEnabled(len(keys) == 1 and self.s.items[keys[0]].get("source") != "CurseForge")
         self.clear_button.setEnabled(any(self.s.items[key]["status"] == "Complete" for key in self.queue_model.indices))
         self.pause_button.setText("Resume queue" if self.s.paused else "Pause queue")
@@ -1342,8 +1351,9 @@ class MainWindow(QMainWindow):
         search = self.history_search.text().strip().casefold()
         date_filter = self.history_date.currentIndex()
         status_filter = self.history_result.currentText()
+        history = self.s.history_rows()
         self.filtered_history = {}
-        for index, record in enumerate(self.s.history_rows()):
+        for record in history:
             if status_filter != "All results" and record["result"] != status_filter:
                 continue
             date = record.get("date", "")
@@ -1356,13 +1366,16 @@ class MainWindow(QMainWindow):
             if search and search not in " ".join([record["name"], record["creator"], record["action"],
                                                     record.get("error", ""), *record["paths"]]).casefold():
                 continue
-            self.filtered_history[str(index)] = record
+            # Saved events keep their identity in memory. Rebuilt legacy install rows use their batch.
+            batch = record.get("batch")
+            key = f"batch:{batch}" if batch and record["action"] == "Install" else f"event:{id(record)}"
+            self.filtered_history[key] = record
         rows = [(key, (local_date(record["date"]), record["name"], record["creator"] or "—", record["action"],
                        record["result"], record["paths"][0] if record["paths"] else "—", record.get("error", "")))
                 for key, record in self.filtered_history.items()]
         update_rows(self.history_view, self.history_model, rows)
         self.history_empty.setVisible(not rows)
-        self.history_empty.setText("No activity matches these filters." if self.s.history_rows()
+        self.history_empty.setText("No activity matches these filters." if history
                                    else "No installation activity has been recorded yet.")
         self.history_actions()
 
