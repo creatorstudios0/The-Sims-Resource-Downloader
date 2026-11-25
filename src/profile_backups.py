@@ -16,6 +16,11 @@ def read_state(path):
     ):
         raise ValueError("The library state file has an invalid structure.")
 
+    for key, item in value.get("items", {}).items():
+        if (not isinstance(item, dict) or not isinstance(item.get("status"), str)
+                or not isinstance(item.get("name"), str)):
+            raise ValueError(f"The library state file has an invalid queue item ({key}).")
+
     # Recovery metadata can be rebuilt without rolling back library records.
     if not isinstance(value.get("reviewedGameVersions"), dict):
         value.pop("reviewedGameVersions", None)

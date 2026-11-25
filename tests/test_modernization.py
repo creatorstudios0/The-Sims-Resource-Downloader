@@ -393,6 +393,38 @@ def test_profile_backup_recovers_corrupt_state(tmp_path, qtbot, monkeypatch):
     recovered.shutdown()
 
 
+@pytest.mark.parametrize("damaged_item", [None, {}, {"name": "Broken", "status": []}])
+def test_profile_recovery_skips_malformed_queue_records(tmp_path, qapp, monkeypatch, damaged_item):
+    monkeypatch.setattr(qt_services, "detect_game", lambda: None)
+    state_path = tmp_path / "desktop-state.json"
+    service = LibraryService(state_path)
+    service.import_text(URL, lookup=False)
+    service.profiles["Favorites"] = ["123"]
+    service.save()
+    snapshot = service.backups.snapshots()[0]
+    service.shutdown()
+
+    damaged = json.loads(snapshot.read_text(encoding="utf-8"))
+    damaged["items"]["123"] = damaged_item
+    invalid_snapshot = snapshot.with_name("profile-9999-01-01_00-00-00-000000.json")
+    for path in (invalid_snapshot, state_path):
+        path.write_text(json.dumps(damaged), encoding="utf-8")
+
+    recovered = LibraryService(state_path)
+    try:
+        assert recovered.recovered == snapshot
+        assert recovered.profiles == {"Favorites": ["123"]}
+        assert recovered.items["123"]["url"] == URL
+
+        before_restore = state_path.read_bytes()
+        with pytest.raises(ValueError, match="invalid queue item"):
+            recovered.restore_backup(invalid_snapshot)
+        assert state_path.read_bytes() == before_restore
+        assert recovered.items["123"]["url"] == URL
+    finally:
+        recovered.shutdown()
+
+
 def test_profile_backup_restore_resets_library_group_filters(app_state, qtbot, tmp_path, monkeypatch):
     service, window = app_state
     files = [tmp_path / name for name in ("first.package", "second.package")]
