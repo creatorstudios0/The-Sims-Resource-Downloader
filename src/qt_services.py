@@ -529,6 +529,7 @@ class LibraryService(QObject):
             self.progress_data.pop(key, None)
             if value:
                 item.update(value)
+                self.state["queueHidden"] = [hidden for hidden in self.state["queueHidden"] if hidden != key]
                 if item["name"] == f"TSR item {key}":
                     item["name"] = Path(item["path"]).stem
                 item.update(added=item.get("added") or timestamp(), inferred=True)

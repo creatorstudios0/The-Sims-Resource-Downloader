@@ -131,6 +131,42 @@ def test_import_dependencies_progress_retry_and_pause(app_state, qtbot, monkeypa
 
 
 
+@pytest.mark.parametrize("provider", ["tsr", "curseforge"])
+def test_replacement_download_stays_visible_after_completion(app_state, qtbot, tmp_path, monkeypatch, provider):
+    service, window = app_state
+    service.state["game"] = str(tmp_path)
+    saved = tmp_path / "download.package"
+    saved.write_bytes(b"original")
+    project = {"id": 42, "name": "Test project"}
+    file = {"id": 24, "fileName": saved.name}
+    if provider == "tsr":
+        key = "123"
+        service.import_text(URL, lookup=False)
+    else:
+        key = "cf-42-24"
+        service.items[key] = {"name": project["name"], "source": "CurseForge", "url": curseforge.CATALOG}
+    service.items[key].update(status="Complete", path=str(saved))
+    service.publish()
+    window.clear_completed()
+    assert key not in window.queue_model.indices
+    saved.unlink()
+
+    def transfer(*_):
+        saved.write_bytes(b"replacement")
+        return {"status": "Complete", "path": str(saved)}
+
+    monkeypatch.setattr(qt_services, "fetch_item", transfer)
+    monkeypatch.setattr(curseforge, "download", transfer)
+    if provider == "tsr":
+        service.import_text(URL, lookup=False)
+        service.queue([key])
+    else:
+        service.queue_curseforge_file(project, file)
+    qtbot.waitUntil(lambda: service.items[key]["status"] == "Complete")
+    assert key in window.queue_model.indices
+    assert key not in json.loads(service.path.read_text(encoding="utf-8"))["queueHidden"]
+
+
 def test_remove_selected_keeps_download_that_starts_during_confirmation(app_state, monkeypatch):
     service, window = app_state
     service.import_text(f"{URL} {URL[:-3]}124 {URL[:-3]}125", lookup=False)
