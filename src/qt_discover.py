@@ -85,21 +85,22 @@ class DiscoverPage(QWidget):
         self.window.go(1)
 
     def search(self):
-        if "curseforge-search" in self.service.jobs:
-            return
-        self.service.curseforge_key = self.api_key.text().strip()
-        if not self.service.curseforge_key:
-            self.status.setText("Enter a CurseForge API key first.")
-            self.api_key.setFocus()
-            return
-        self.query = self.search_box.text().strip()
         self.load(0)
 
     def load(self, index, *, paging=False):
+        if "curseforge-search" in self.service.jobs:
+            return
+        key = self.api_key.text().strip()
+        if not key:
+            self.status.setText("Enter a CurseForge API key first.")
+            self.api_key.setFocus()
+            return
+        if not paging:
+            self.query = self.search_box.text().strip()
         self.requested_index = index
         self.paging = paging
         self.status.setText("Searching CurseForge…")
-        self.service.job("curseforge-search", curseforge.search, self.service.curseforge_key, self.query, index)
+        self.service.job("curseforge-search", curseforge.search, key, self.query, index)
         self.set_busy(True)
 
     def result(self, value, error):
