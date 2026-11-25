@@ -185,7 +185,7 @@ def test_cancel_and_close(app_state, qtbot, monkeypatch):
     assert service.state["windowGeometry"]
 
 
-def test_real_disk_scan_install_toggle_and_history(app_state, qtbot, tmp_path):
+def test_real_disk_scan_install_toggle_and_history(app_state, qtbot, tmp_path, monkeypatch):
     service, window = app_state
     game = tmp_path / "The Sims 4"
     mods = game / "Mods"
@@ -224,7 +224,8 @@ def test_real_disk_scan_install_toggle_and_history(app_state, qtbot, tmp_path):
     assert window.stats[0].text() == "3"
     service.settings["backup_enabled"] = True
     service.settings["backup"] = str(tmp_path / "backups")
-    service.undo(batch)
+    monkeypatch.setattr(window, "confirm", lambda *_: True)
+    window.uninstall(batch)
     qtbot.waitUntil(lambda: batch not in service.batches)
     assert not (mods / "outside.package").exists() and not (tray / "house.trayitem").exists()
     assert list((tmp_path / "backups" / batch).glob("*/house.trayitem"))
@@ -256,6 +257,29 @@ def test_install_history_keeps_selected_batch_when_new_activity_arrives(app_stat
     monkeypatch.setattr(window, "uninstall", uninstall)
     window.history_undo.click()
     uninstall.assert_called_once_with("older-batch")
+
+
+@pytest.mark.parametrize("change", ["removed", "quarantined", "busy"])
+def test_uninstall_rechecks_the_batch_after_confirmation(app_state, monkeypatch, change):
+    service, window = app_state
+    record = dict(path=str(service.path.parent / "dress.package"), disabled=False, hash="recorded")
+    service.batches["batch"] = dict(item="Dress", files=[record])
+    undo = Mock()
+    monkeypatch.setattr(service, "undo", undo)
+
+    def confirm(*_):
+        if change == "removed":
+            del service.batches["batch"]
+        elif change == "quarantined":
+            record["disabled"] = True
+        else:
+            service.jobs.add("content-backup")
+        return True
+
+    monkeypatch.setattr(window, "confirm", confirm)
+    window.uninstall("batch")
+    undo.assert_not_called()
+    assert window.notifications.entries[0][1] == "WARNING"
 
 
 def test_import_and_refresh_hides_deleted_files(app_state, qtbot, tmp_path, monkeypatch):
@@ -630,6 +654,24 @@ def test_activity_retains_complete_multiline_events(app_state):
     console.level.setCurrentText("All levels")
     console.append("INFO", "Another event")
     assert "Error detail" not in console.output.toPlainText()
+
+
+def test_filtered_activity_keeps_text_selection_when_hidden_events_expire(app_state):
+    _, window = app_state
+    console = window.activity_console
+    console.clear()
+    console.level.setCurrentText("Error")
+    console.append("INFO", "Oldest hidden event")
+    console.append("ERROR", "Visible error")
+    for index in range(console.entries.maxlen - 2):
+        console.append("INFO", f"Hidden event {index}")
+
+    console.output.selectAll()
+    console.append("INFO", "New hidden event")
+    assert console.output.textCursor().selectedText() == "Visible error"
+
+    console.append("INFO", "Another hidden event")
+    assert console.output.toPlainText() == ""
 
 
 def test_scanned_mod_keeps_saved_memberships_when_toggled(app_state, qtbot, tmp_path):

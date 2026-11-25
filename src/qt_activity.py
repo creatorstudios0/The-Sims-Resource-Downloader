@@ -67,9 +67,11 @@ class ActivityConsole(QWidget):
         cursor.insertText(display_text.replace("\n", "\u2028"), style)
 
     def append(self, level, text):
-        at_capacity = len(self.entries) == self.entries.maxlen
+        filtered = bool(self.search.text() or self.level.currentIndex())
+        evicting_visible = (filtered and len(self.entries) == self.entries.maxlen
+                            and self.matches(*self.entries[0]))
         self.entries.append((level, text))
-        if at_capacity and (self.search.text() or self.level.currentIndex()):
+        if evicting_visible:
             self.rebuild()
         elif self.matches(level, text):
             bar = self.output.verticalScrollBar()
