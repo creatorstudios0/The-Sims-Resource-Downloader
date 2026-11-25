@@ -393,6 +393,36 @@ def test_profile_backup_recovers_corrupt_state(tmp_path, qtbot, monkeypatch):
     recovered.shutdown()
 
 
+def test_automatic_profile_recovery_keeps_download_without_installing(tmp_path, qtbot, monkeypatch):
+    monkeypatch.setattr(qt_services, "detect_game", lambda: None)
+    state_path = tmp_path / "desktop-state.json"
+    game = tmp_path / "game"
+    game.mkdir()
+    source = tmp_path / "pending.package"
+    source.write_bytes(b"package")
+    service = LibraryService(state_path)
+    service.state["game"] = str(game)
+    service.settings["auto_scan"] = False
+    service.add_local([source])
+    key = next(iter(service.items))
+    service.items[key]["install_requested"] = True
+    service.save()
+    service.shutdown()
+    state_path.write_text("{truncated", encoding="utf-8")
+
+    recovered = LibraryService(state_path)
+    try:
+        window = MainWindow(recovered)
+        qtbot.addWidget(window)
+        qtbot.waitUntil(lambda: not recovered.jobs)
+        assert recovered.recovered is not None
+        assert recovered.items[key]["path"] == str(source)
+        assert not recovered.batches
+        assert not (game / "Mods" / source.name).exists()
+    finally:
+        recovered.shutdown()
+
+
 def test_profile_backup_restore_resets_library_group_filters(app_state, qtbot, tmp_path, monkeypatch):
     service, window = app_state
     files = [tmp_path / name for name in ("first.package", "second.package")]
