@@ -10,11 +10,14 @@ from pathlib import Path
 import sys
 
 from library_insights import format_summary, scan_inventory, write_report
+from windows_folders import detect_game
 
 PROJECT = Path(__file__).resolve().parent.parent
 
 
 def default_game():
+    if game := detect_game():
+        return game
     home = Path.home()
     candidates = [
         home / "Documents" / "Electronic Arts" / "The Sims 4",

@@ -4,8 +4,9 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
-from console_tools import diagnostics, queue_info, resolved_download_folder, build_parser
+from console_tools import build_parser, default_game, diagnostics, queue_info, resolved_download_folder
 
 
 class ConsoleToolsTests(unittest.TestCase):
@@ -26,6 +27,19 @@ class ConsoleToolsTests(unittest.TestCase):
         with TemporaryDirectory() as temp:
             rows = diagnostics({"maxActiveDownloads": 0}, Path(temp))
             self.assertFalse(rows[-1][-1])
+
+    def test_default_game_finds_redirected_documents(self):
+        with TemporaryDirectory() as temp:
+            home = Path(temp)
+            redirected = home / "Custom Documents"
+            game = redirected / "Electronic Arts" / "The Sims 4"
+            (game / "Mods").mkdir(parents=True)
+            with (
+                patch.object(Path, "home", return_value=home),
+                patch("windows_folders.known_folder", return_value=redirected),
+                patch.dict("os.environ", {"OneDrive": "", "OneDriveConsumer": "", "OneDriveCommercial": ""}),
+            ):
+                self.assertEqual(default_game(), game.resolve())
 
     def test_parser_has_all_tools(self):
         for command in ("doctor", "audit", "queue", "settings"):

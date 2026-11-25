@@ -2,7 +2,9 @@
 from pathlib import Path
 import os
 import sys
-import winreg
+
+if os.name == "nt":
+    import winreg
 
 GAME_NAME = "The Sims 4"
 GAME_FOLDERS = ("Mods", "Tray", "saves")
@@ -10,6 +12,8 @@ SHELL_FOLDERS = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell 
 
 
 def known_folder(key, fallback):
+    if os.name != "nt":
+        return fallback
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, SHELL_FOLDERS) as registry:
             value, _ = winreg.QueryValueEx(registry, key)

@@ -244,7 +244,7 @@ class LibraryService(QObject):
         self.path = Path(state_path)
         self.backups = ProfileBackups(self.path)
         state, self.recovered = self.backups.load(self.path)
-        self.load_state(state)
+        self.load_state(state, from_backup=self.recovered is not None)
         self.backup_error = None
         self.curseforge_key = os.environ.get("CURSEFORGE_API_KEY", "").strip()
         self.active = {}
@@ -275,7 +275,7 @@ class LibraryService(QObject):
             self.state["legacyImported"] = True
         self.save()
 
-    def load_state(self, state):
+    def load_state(self, state, *, from_backup=False):
         self.state = state
         self.settings = self.state.setdefault("settings", {})
         for key, value in settings_defaults().items():
@@ -291,6 +291,9 @@ class LibraryService(QObject):
         self.state["collections"] = self.collections
         self.state.setdefault("queueHidden", [])
         for item in self.items.values():
+            if from_backup:
+                # An older snapshot may describe an installation that already finished or was cancelled.
+                item.pop("install_requested", None)
             if item["status"] == "Downloading":
                 item["status"] = "Paused"
             elif item["status"] == "Checking":
@@ -316,9 +319,7 @@ class LibraryService(QObject):
         state.setdefault("settings", {})["website_links"] = self.settings["website_links"]
         self.backups.save(self.state)
         save_json(self.path, state)
-        self.load_state(state)
-        for item in self.items.values():
-            item.pop("install_requested", None)
+        self.load_state(state, from_backup=True)
         self.paused = True
         self.disk, self.library_present, self.health = {}, {}, {}
         self.scanned_sources.clear()
