@@ -1299,9 +1299,17 @@ class MainWindow(QMainWindow):
         batch = self.s.batches.get(batch_key)
         if not batch or self.s.mutating_files():
             return
-        paths = [record["path"] for record in batch["files"]]
+        files = [dict(record) for record in batch["files"]]
+        paths = [str(installed_path(record)) for record in files]
         if not self.confirm("Uninstall managed files", f"Remove {len(paths)} file(s) from this install batch?",
-                            "\n".join(paths)):
+                            "\n".join(paths)) or self.closing:
+            return
+        if self.s.mutating_files():
+            self.inform("Wait for the current file operation to finish before uninstalling.", "warning")
+            return
+        current = self.s.batches.get(batch_key)
+        if current is None or current["files"] != files:
+            self.inform("This install batch changed. Review it before uninstalling.", "warning")
             return
         self.s.undo(batch_key)
         self.inform("Verifying and uninstalling managed files…")
