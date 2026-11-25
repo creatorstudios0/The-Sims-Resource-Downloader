@@ -233,6 +233,31 @@ def test_real_disk_scan_install_toggle_and_history(app_state, qtbot, tmp_path):
     qtbot.waitUntil(lambda: not service.jobs)
 
 
+
+@pytest.mark.parametrize("legacy_batch", [False, True])
+def test_install_history_keeps_selected_batch_when_new_activity_arrives(app_state, monkeypatch, legacy_batch):
+    service, window = app_state
+    service.batches["older-batch"] = dict(item="Older mod", files=[], date="2025-01-01")
+    if not legacy_batch:
+        service.history_event("Older mod", "Install", "Completed", [], when="2025-01-01")
+        service.history[-1]["batch"] = "older-batch"
+    service.publish()
+    window.go(3)
+    window.history_view.selectRow(0)
+    assert window.current_history()["batch"] == "older-batch"
+
+    service.batches["newer-batch"] = dict(item="Newer mod", files=[], date="2025-01-02")
+    service.history_event("Newer mod", "Install", "Completed", [], when="2025-01-02")
+    service.history[-1]["batch"] = "newer-batch"
+    service.publish()
+
+    assert window.current_history()["batch"] == "older-batch"
+    uninstall = Mock()
+    monkeypatch.setattr(window, "uninstall", uninstall)
+    window.history_undo.click()
+    uninstall.assert_called_once_with("older-batch")
+
+
 def test_import_and_refresh_hides_deleted_files(app_state, qtbot, tmp_path, monkeypatch):
     service, window = app_state
     service.state["game"] = str(tmp_path)

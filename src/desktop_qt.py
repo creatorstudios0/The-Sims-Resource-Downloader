@@ -1351,8 +1351,9 @@ class MainWindow(QMainWindow):
         search = self.history_search.text().strip().casefold()
         date_filter = self.history_date.currentIndex()
         status_filter = self.history_result.currentText()
+        history = self.s.history_rows()
         self.filtered_history = {}
-        for index, record in enumerate(self.s.history_rows()):
+        for record in history:
             if status_filter != "All results" and record["result"] != status_filter:
                 continue
             date = record.get("date", "")
@@ -1365,13 +1366,16 @@ class MainWindow(QMainWindow):
             if search and search not in " ".join([record["name"], record["creator"], record["action"],
                                                     record.get("error", ""), *record["paths"]]).casefold():
                 continue
-            self.filtered_history[str(index)] = record
+            # Saved events keep their identity in memory. Rebuilt legacy install rows use their batch.
+            batch = record.get("batch")
+            key = f"batch:{batch}" if batch and record["action"] == "Install" else f"event:{id(record)}"
+            self.filtered_history[key] = record
         rows = [(key, (local_date(record["date"]), record["name"], record["creator"] or "—", record["action"],
                        record["result"], record["paths"][0] if record["paths"] else "—", record.get("error", "")))
                 for key, record in self.filtered_history.items()]
         update_rows(self.history_view, self.history_model, rows)
         self.history_empty.setVisible(not rows)
-        self.history_empty.setText("No activity matches these filters." if self.s.history_rows()
+        self.history_empty.setText("No activity matches these filters." if history
                                    else "No installation activity has been recorded yet.")
         self.history_actions()
 
