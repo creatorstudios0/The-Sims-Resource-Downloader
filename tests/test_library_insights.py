@@ -3,8 +3,11 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from tempfile import TemporaryDirectory
+import errno
 import json
+import os
 import unittest
+from unittest.mock import patch
 
 from library_insights import scan_inventory, write_report, format_summary
 
@@ -48,6 +51,42 @@ class InventoryTests(unittest.TestCase):
         report = scan_inventory(self.mods / "missing")
         self.assertEqual(report["total_files"], 0)
         self.assertEqual(len(report["warnings"]), 1)
+
+    def test_inaccessible_subfolder_reports_warning_and_keeps_readable_files(self):
+        blocked = self.mods / "blocked"
+        blocked.mkdir()
+        (self.mods / "one.package").write_bytes(b"test")
+        scandir = os.scandir
+
+        def selectively_scan(path):
+            if Path(path) == blocked:
+                raise PermissionError(errno.EACCES, "Permission denied", str(path))
+            return scandir(path)
+
+        with patch("library_insights.os.scandir", side_effect=selectively_scan):
+            report = scan_inventory(self.mods)
+
+        self.assertEqual(report["total_files"], 1)
+        self.assertEqual(len(report["warnings"]), 1)
+        self.assertIn("blocked", report["warnings"][0])
+
+    @unittest.skipUnless(os.name == "nt", "Windows junctions unavailable")
+    def test_excludes_junction_roots_and_subfolders(self):
+        from _winapi import CreateJunction
+
+        relocated = self.root / "relocated"
+        relocated.mkdir()
+        (relocated / "external.package").write_bytes(b"external")
+        (self.mods / "local.package").write_bytes(b"local")
+        linked_root = self.root / "linked-mods"
+        CreateJunction(str(relocated), str(linked_root))
+        CreateJunction(str(relocated), str(self.mods / "linked-subfolder"))
+
+        root_report = scan_inventory(linked_root)
+        self.assertEqual(root_report["total_files"], 0)
+        self.assertEqual(len(root_report["warnings"]), 1)
+        self.assertEqual([entry["relative_path"] for entry in scan_inventory(self.mods)["files"]],
+                         ["local.package"])
 
     def test_max_files_limit(self):
         for name in ("one.package", "two.package"):

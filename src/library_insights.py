@@ -11,6 +11,8 @@ import csv
 import json
 import os
 
+from game_recovery import folder_link
+
 MOD_TYPES = {".package", ".ts4script"}
 TRAY_TYPES = {".trayitem", ".blueprint", ".bpi", ".hhi", ".sgi",
               ".householdbinary", ".room", ".rmi"}
@@ -27,7 +29,11 @@ def _digest(path):
 
 
 def _is_junction(path):
-    return bool(getattr(path, "is_junction", lambda: False)())
+    try:
+        return folder_link(path.lstat())
+    except OSError:
+        # Let the directory walk report unreadable paths.
+        return False
 
 
 def _kind(name):
@@ -51,11 +57,15 @@ def scan_inventory(mods, tray=None, max_files=MAX_FILES):
     bytes_total = 0
     disabled_count = 0
     truncated = False
+
+    def report_walk_error(error):
+        warnings.append(f"Cannot scan folder: {error}")
+
     for label, root in roots:
         if not root.is_dir() or root.is_symlink() or _is_junction(root):
             warnings.append(f"{label} folder is unavailable or unsafe: {root}")
             continue
-        for directory, children, files in os.walk(root, followlinks=False):
+        for directory, children, files in os.walk(root, followlinks=False, onerror=report_walk_error):
             children[:] = [child for child in children if not (
                 (Path(directory) / child).is_symlink() or
                 _is_junction(Path(directory) / child))]
