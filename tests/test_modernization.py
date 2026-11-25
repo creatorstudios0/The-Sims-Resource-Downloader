@@ -656,6 +656,24 @@ def test_activity_retains_complete_multiline_events(app_state):
     assert "Error detail" not in console.output.toPlainText()
 
 
+def test_filtered_activity_keeps_text_selection_when_hidden_events_expire(app_state):
+    _, window = app_state
+    console = window.activity_console
+    console.clear()
+    console.level.setCurrentText("Error")
+    console.append("INFO", "Oldest hidden event")
+    console.append("ERROR", "Visible error")
+    for index in range(console.entries.maxlen - 2):
+        console.append("INFO", f"Hidden event {index}")
+
+    console.output.selectAll()
+    console.append("INFO", "New hidden event")
+    assert console.output.textCursor().selectedText() == "Visible error"
+
+    console.append("INFO", "Another hidden event")
+    assert console.output.toPlainText() == ""
+
+
 def test_scanned_mod_keeps_saved_memberships_when_toggled(app_state, qtbot, tmp_path):
     service, window = app_state
     service.state["game"] = str(tmp_path)
