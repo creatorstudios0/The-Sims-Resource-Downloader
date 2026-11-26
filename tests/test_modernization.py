@@ -683,3 +683,59 @@ def test_can_add_selection_to_another_group_while_filtering(app_state, qtbot, tm
 
     assert groups["Destination"] == [key]
     assert getattr(window, kind) == "Source"
+
+def test_changing_mods_folder_clears_previous_scan(app_state, qtbot, tmp_path):
+    service, window = app_state
+    old_mods = tmp_path / "old mods"
+    new_mods = tmp_path / "new mods"
+    old_mods.mkdir()
+    new_mods.mkdir()
+    (old_mods / "old.package").write_bytes(b"old")
+    (new_mods / "new.package").write_bytes(b"new")
+    service.settings["mods"] = str(old_mods)
+    service.scan()
+    qtbot.waitUntil(lambda: "scan" not in service.jobs)
+    assert [record["name"] for record in window.library_entries.values()] == ["old.package"]
+
+    service.update_settings("", {"mods": str(new_mods)})
+    assert not window.library_entries
+    assert not service.health
+
+    service.scan()
+    qtbot.waitUntil(lambda: "scan" not in service.jobs)
+    assert [record["name"] for record in window.library_entries.values()] == ["new.package"]
+    assert service.health["mods"] == 1
+
+
+@pytest.mark.parametrize("auto_scan", [False, True])
+def test_old_scan_cannot_publish_after_game_folder_changes(app_state, qtbot, tmp_path, monkeypatch, auto_scan):
+    service, window = app_state
+    old_game = tmp_path / "old game"
+    new_game = tmp_path / "new game"
+    for game, name in ((old_game, "old"), (new_game, "new")):
+        tray = game / "Tray"
+        tray.mkdir(parents=True)
+        (tray / f"{name}.trayitem").write_bytes(b"tray")
+    service.state["game"] = str(old_game)
+    started, release = Event(), Event()
+    published = []
+
+    def slow_scan(mods, items, batches, duplicates, tray):
+        if tray == str(old_game / "Tray"):
+            started.set()
+            if not release.wait(5):
+                raise TimeoutError("test scan was not released")
+        return scan_files(mods, items, batches, duplicates, tray)
+
+    monkeypatch.setattr(qt_services, "scan_files", slow_scan)
+    service.changed.connect(lambda: published.extend(record["name"] for record in window.library_entries.values()))
+    service.scan()
+    qtbot.waitUntil(started.is_set)
+    try:
+        service.update_settings(str(new_game), {"auto_scan": auto_scan})
+    finally:
+        release.set()
+
+    qtbot.waitUntil(lambda: not service.jobs)
+    assert "old.trayitem" not in published
+    assert [record["name"] for record in window.library_entries.values()] == (["new.trayitem"] if auto_scan else [])

@@ -260,6 +260,7 @@ class LibraryService(QObject):
         self.paused = True
         self.closing = False
         self.scan_again = False
+        self.scan_roots = None
         self.transfer_pool = ThreadPoolExecutor(max_workers=10)
         self.workers = ThreadPoolExecutor(max_workers=4)
         self.completed.connect(self.finish, Qt.ConnectionType.QueuedConnection)
@@ -477,10 +478,13 @@ class LibraryService(QObject):
             logger.warning("%s failed: %s", action, error)
         if action == "job":
             self.jobs.discard(key)
-            if key == "scan" and value is not None:
-                self.disk, self.library_present, self.health = value
-                self.scanned_sources = self.scan_sources
-                logger.info("Library refreshed: %d mods, %d missing or unreadable files", self.health["mods"], self.health["missing"])
+            if key == "scan":
+                if self.scan_roots != self.library_roots():
+                    value, error = None, None
+                if value is not None:
+                    self.disk, self.library_present, self.health = value
+                    self.scanned_sources = self.scan_sources
+                    logger.info("Library refreshed: %d mods, %d missing or unreadable files", self.health["mods"], self.health["missing"])
             elif error is None and not key.startswith("thumbnail:"):
                 logger.info("Finished %s", key)
             if key == "cleanup":
@@ -589,6 +593,10 @@ class LibraryService(QObject):
         if self.settings["auto_scan"]:
             self.scan()
 
+    def library_roots(self):
+        game = self.game()
+        return self.mods(), str(game / "Tray") if game else None
+
     def scan(self):
         if self.closing:
             return
@@ -600,8 +608,9 @@ class LibraryService(QObject):
                              if item["status"] == "Complete" and item.get("path")}
         batches = {key: dict(item=batch["item"], files=[dict(record) for record in batch["files"]])
                    for key, batch in self.batches.items()}
-        tray = str(self.game() / "Tray") if self.game() else None
-        self.job("scan", scan_files, self.mods(), items, batches, self.settings["duplicates"], tray)
+        self.scan_roots = self.library_roots()
+        mods, tray = self.scan_roots
+        self.job("scan", scan_files, mods, items, batches, self.settings["duplicates"], tray)
 
     def add_local(self, paths, install_now=False):
         if install_now:
@@ -789,11 +798,14 @@ class LibraryService(QObject):
                                                     for name in self.jobs)
 
     def update_settings(self, game, settings):
+        previous_roots = self.library_roots()
         if game:
             self.state["game"] = game
         else:
             self.state.pop("game", None)
         self.settings.update(settings)
+        if self.library_roots() != previous_roots:
+            self.disk, self.health = {}, {}
         self.pump()
         self.publish()
         self.pump_installs()
