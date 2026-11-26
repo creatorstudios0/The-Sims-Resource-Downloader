@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os, zipfile
+import os, re, zipfile
 from pathlib import Path
 from config import CONFIG
 from logger import logger
@@ -142,15 +142,20 @@ def _getArchiveFileNames(filePath: str) -> list[str]:
 
 
 def _getTraySubcategory(extensions: set[str], searchableText: str) -> str:
-    if ".room" in extensions or _hasKeyword(searchableText, ["room"]):
+    if ".room" in extensions:
         return "Rooms"
-    if extensions & {".householdbinary", ".hhi", ".sgi"} or _hasKeyword(
-        searchableText, ["household", "sim", "sims"]
-    ):
+    if extensions & {".householdbinary", ".hhi", ".sgi"}:
         return "Households"
-    if extensions & {".blueprint", ".bpi"} or _hasKeyword(
-        searchableText, ["build", "house", "lot"]
-    ):
+    if extensions & {".blueprint", ".bpi"}:
+        return "Lots"
+
+    # Generic Tray files need a filename hint. Treat underscores as word separators.
+    words = set(re.findall(r"[^\W_]+", searchableText))
+    if words & {"room", "rooms", "bedroom", "bedrooms", "bathroom", "bathrooms"}:
+        return "Rooms"
+    if words & {"household", "households", "sim", "sims"}:
+        return "Households"
+    if words & {"build", "builds", "house", "houses", "lot", "lots"}:
         return "Lots"
     return "Other Tray Files"
 

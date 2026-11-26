@@ -70,6 +70,8 @@ if errorlevel 1 pause
 exit /b %errorlevel%
 
 :ConsoleTools
+rem Preserve literal exclamation marks in game and report paths.
+setlocal DisableDelayedExpansion
 set "TOOL=%~1"
 if /I "%TOOL%"=="--doctor" set "TOOL=doctor"
 if /I "%TOOL%"=="--audit" set "TOOL=audit"
