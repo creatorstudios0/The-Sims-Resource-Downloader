@@ -9,7 +9,11 @@ const allCategories = ["All", "Hair", "Clothing", "Build & Buy", "Lots", "Househ
 const escaped = value => String(value ?? "").replace(/[&<>"']/g, char =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 const plain = value => escaped(value || "Unknown");
-const route = id => (apache ? "?mod=" : "/mods/") + encodeURIComponent(id);
+const querySuffix = params => params.size ? "?" + params : "";
+function route(id, search) {
+  if (!apache) return "/mods/" + encodeURIComponent(id) + querySuffix(search);
+  return "?" + new URLSearchParams([["mod", id], ...search]);
+}
 const catalogUrl = apache ? "./catalog.json" : "/api/catalog";
 let apacheCatalog;
 
@@ -87,8 +91,9 @@ if (isBrowse) {
     request?.abort();
     request = new AbortController();
     const signal = request.signal;
-    const params = query().toString();
-    history.replaceState(null, "", location.pathname + (params ? "?" + params : "") + location.hash);
+    const params = query();
+    const suffix = querySuffix(params);
+    history.replaceState(null, "", location.pathname + suffix + location.hash);
     for (const control of $("categories").children) {
       control.setAttribute("aria-pressed", control.dataset.category === category);
     }
@@ -96,14 +101,13 @@ if (isBrowse) {
     $("pagination").hidden = true;
     $("results").setAttribute("aria-busy", "true");
     try {
-      const data = apache ? await searchApache(new URLSearchParams(params))
-        : await get(catalogUrl + (params ? "?" + params : ""), signal);
+      const data = apache ? await searchApache(params) : await get(catalogUrl + suffix, signal);
       if (signal.aborted) return;
       $("results-status").textContent = Number.isInteger(data.total)
         ? data.total.toLocaleString() + (data.total === 1 ? " resource" : " resources")
         : (data.items.length ? "Page " + page : "No matches on this page");
       const content = data.items.map(item =>
-        '<a class="card" href="' + route(item.id) + '"><div class="card-media">' +
+        '<a class="card" href="' + escaped(route(item.id, params)) + '"><div class="card-media">' +
         image(item) + '<span class="category-tag">' + plain(item.category) + '</span></div><div class="card-body">' +
         '<h3 class="card-title">' + plain(item.name) + '</h3><p class="card-creator">' + plain(item.creator) + '</p>' +
         '<p class="card-summary">' + escaped(item.summary) + '</p>' +
@@ -150,7 +154,11 @@ if (isBrowse) {
   $("next").addEventListener("click", () => { page++; update(true); });
   update();
 } else {
-  const back = '<a class="back" href="' + (apache ? './#catalog' : '/#catalog') + '">Back to Discover</a>';
+  const search = new URLSearchParams(location.search);
+  search.delete("mod");
+  const backUrl = (apache ? "./" : "/") + querySuffix(search) + "#catalog";
+  $("detail").querySelector(".back").href = backUrl;
+  const back = '<a class="back" href="' + escaped(backUrl) + '">Back to Discover</a>';
   const loadDetail = apache ? detailApache(detailId) : get("/api/mods/" + encodeURIComponent(detailId));
 
   loadDetail.then(item => {
@@ -167,7 +175,7 @@ if (isBrowse) {
     const versions = item.files?.length
       ? '<details class="versions"><summary>Recent files</summary><ul>' + item.files.map(file => '<li>' + escaped(file) + '</li>').join("") + '</ul></details>' : "";
     const deps = item.dependencies?.length
-      ? item.dependencies.filter(validId).map(id => '<a href="' + route(id) + '">CurseForge resource ' + id + '</a>').join(", ")
+      ? item.dependencies.filter(validId).map(id => '<a href="' + escaped(route(id, search)) + '">CurseForge resource ' + id + '</a>').join(", ")
       : item.dependencies ? "None listed" : "Unknown";
     const preview = item.sample ? '<p class="preview-note">Sample preview · fictional listing</p>' : "";
     const note = item.sample ? "This sample illustrates the install flow. No download is available."
