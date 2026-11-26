@@ -142,13 +142,19 @@ class TSRDownload:
         startingBytes = os.path.getsize(partPath) if os.path.exists(partPath) else 0
         logger.debug(f"Got startingBytes: {startingBytes}")
 
+        headers = {"Accept-Encoding": "identity"}
+        if startingBytes:
+            headers["Range"] = f"bytes={startingBytes}-"
         with self.session.get(
             downloadUrl,
             stream=True,
             timeout=REQUEST_TIMEOUT,
-            headers={"Range": f"bytes={startingBytes}-", "Accept-Encoding": "identity"},
+            headers=headers,
         ) as response:
             logger.debug(f"Request status is: {response.status_code}")
+            if response.status_code == 416 and startingBytes:
+                # The next attempt must start fresh instead of repeating the rejected range.
+                os.remove(partPath)
             response.raise_for_status()
 
             rangeEnd = None
