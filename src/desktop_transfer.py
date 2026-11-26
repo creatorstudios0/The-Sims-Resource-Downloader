@@ -92,29 +92,35 @@ class DesktopTSRDownload(TSRDownload):
             if not name:
                 raise ValueError("TSR returned an empty filename")
             received_etag = response.headers.get("ETag", "")
-            expected = int(response.headers.get("Content-Length") or 0)
+            encoding = response.headers.get("Content-Encoding", "identity")
+            range_end = None
             if response.status_code == 206:
-                match = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+)", response.headers.get("Content-Range", ""))
-                if (not etag or received_etag != etag or not match
-                        or int(match[1]) != offset or int(match[2]) + 1 != int(match[3])):
+                match = re.fullmatch(r"bytes ([0-9]+)-([0-9]+)/([0-9]+)",
+                                     response.headers.get("Content-Range", ""), re.IGNORECASE)
+                if (not etag or received_etag != etag or encoding != "identity" or not match
+                        or int(match[1]) != offset or not offset <= int(match[2]) < int(match[3])):
                     partial.unlink(missing_ok=True)
                     validator.unlink(missing_ok=True)
                     raise requests.ConnectionError("Invalid resume response")
+                range_end = int(match[2]) + 1
                 total = int(match[3])
             elif response.status_code == 200:
                 offset = 0
-                total = expected if response.headers.get("Content-Encoding", "identity") == "identity" else 0
+                total = int(response.headers.get("Content-Length") or 0) if encoding == "identity" else 0
             else:
                 raise ValueError(f"Unexpected download status {response.status_code}")
             downloaded = offset
             last_update = 0.0
             with partial.open("ab" if offset else "wb") as out:
-                if received_etag and not received_etag.startswith("W/") and response.headers.get("Content-Encoding", "identity") == "identity":
+                if received_etag and not received_etag.startswith("W/") and encoding == "identity":
                     validator.write_text(received_etag, encoding="utf-8")
                 else:
                     validator.unlink(missing_ok=True)
                 for chunk in response.iter_content(128 * 1024):
                     self._check_cancel(cancel)
+                    if range_end is not None and downloaded + len(chunk) > range_end:
+                        out.truncate(offset)
+                        raise requests.ConnectionError("Download body exceeds Content-Range")
                     out.write(chunk)
                     downloaded += len(chunk)
                     now = time.monotonic()

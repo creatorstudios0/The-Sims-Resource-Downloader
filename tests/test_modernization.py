@@ -8,6 +8,7 @@ from unittest.mock import Mock
 import zipfile
 
 import pytest
+import requests
 from PySide6.QtCore import QAbstractAnimation, QPoint, Qt
 from PySide6.QtWidgets import QDialog, QMessageBox, QTableView
 
@@ -467,6 +468,55 @@ def test_engine_file_request_and_validated_resume(tmp_path, monkeypatch):
     test = downloader._attemptDownload(str(tmp_path), lambda *args: None, False)
     assert Path(test).read_bytes() == b"old+new"
     assert downloader.session.get.call_args.kwargs["headers"]["Range"] == "bytes=3-"
+
+
+def test_desktop_resume_retains_progress_across_bounded_ranges(tmp_path, monkeypatch):
+    downloader = TSRDownload(parse_url(URL), "")
+    monkeypatch.setattr(downloader, "_getDownloadUrl", lambda: "https://files.example.com/test.package")
+    staging = tmp_path / ".partial"
+    staging.mkdir()
+    partial = staging / "123.part"
+    partial.write_bytes(b"abc")
+    validator = partial.with_suffix(".etag")
+    validator.write_text('"E1"', encoding="utf-8")
+    first = requests_response(206, [b"de"], {"Content-Range": "bytes 3-4/6", "ETag": '"E1"'})
+    last = requests_response(206, [b"f"], {"Content-Range": "bytes 5-5/6", "ETag": '"E1"'})
+    send = Mock(side_effect=[first, last])
+    monkeypatch.setattr(downloader.session, "get", send)
+    progress = Mock()
+
+    with pytest.raises(requests.ConnectionError, match="Incomplete download"):
+        downloader._attemptDownload(str(tmp_path), progress, False)
+
+    assert partial.read_bytes() == b"abcde"
+    assert validator.read_text(encoding="utf-8") == '"E1"'
+    assert list(tmp_path.glob("*.package")) == []
+    result = downloader._attemptDownload(str(tmp_path), progress, False)
+
+    assert Path(result).read_bytes() == b"abcdef"
+    assert [call.kwargs["headers"]["Range"] for call in send.call_args_list] == ["bytes=3-", "bytes=5-"]
+    assert not partial.exists()
+    assert not validator.exists()
+
+
+def test_desktop_resume_keeps_original_prefix_when_range_body_is_too_long(tmp_path, monkeypatch):
+    downloader = TSRDownload(parse_url(URL), "")
+    monkeypatch.setattr(downloader, "_getDownloadUrl", lambda: "https://files.example.com/test.package")
+    staging = tmp_path / ".partial"
+    staging.mkdir()
+    partial = staging / "123.part"
+    partial.write_bytes(b"abc")
+    validator = partial.with_suffix(".etag")
+    validator.write_text('"E1"', encoding="utf-8")
+    response = requests_response(206, [b"de", b"f"], {"Content-Range": "bytes 3-4/6", "ETag": '"E1"'})
+    monkeypatch.setattr(downloader.session, "get", Mock(return_value=response))
+
+    with pytest.raises(requests.ConnectionError, match="exceeds Content-Range"):
+        downloader._attemptDownload(str(tmp_path), Mock(), False)
+
+    assert partial.read_bytes() == b"abc"
+    assert validator.read_text(encoding="utf-8") == '"E1"'
+    assert list(tmp_path.glob("*.package")) == []
 
 
 def requests_response(status, chunks, headers):

@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
+from requests import HTTPError
+
 from TSRDownload import TSRDownload
 
 
@@ -93,6 +95,26 @@ class DownloadResumeTests(TestCase):
 
         self.assertEqual(self.part_path.read_bytes(), b"abc")
         self.assertEqual(list(self.download_path.iterdir()), [self.part_path])
+
+    def test_rejected_saved_range_restarts_the_download(self):
+        self.downloader.url.url = "https://www.thesimsresource.com/downloads/123"
+        self.downloader.ticketInitializedTime = 0
+        probe = MagicMock(headers={"Content-Disposition": 'attachment; filename="mod.package"'})
+        rejected = MagicMock(status_code=416)
+        rejected.__enter__.return_value = rejected
+        rejected.raise_for_status.side_effect = HTTPError(response=rejected)
+        response = MagicMock(status_code=200, headers={"content-length": "6"})
+        response.__enter__.return_value = response
+        response.iter_content.return_value = iter([b"fresh!"])
+
+        with patch.object(self.downloader.session, "get", side_effect=[probe, rejected, probe, response]) as get:
+            with patch("TSRDownload.time.sleep"):
+                result = self.downloader.download(str(self.download_path))
+
+        transfer_calls = [call for call in get.call_args_list if "headers" in call.kwargs]
+        self.assertEqual([call.kwargs["headers"].get("Range") for call in transfer_calls], ["bytes=3-", None])
+        self.assertEqual(Path(result).read_bytes(), b"fresh!")
+        self.assertFalse(self.part_path.exists())
 
     def test_partial_response_with_unknown_total_cannot_finalize(self):
         self.mock_download_response(206, b"def", "bytes 3-5/*")
