@@ -1,5 +1,6 @@
 const GAME = 781;
 const PAGE = 6;
+const SEARCH_LIMIT = 10000;
 const GROUPS = ["Hair", "Clothing", "Build & Buy", "Lots", "Households", "Gameplay"];
 const STYLES = ["Maxis Match", "Alpha"];
 const CF_SEARCH = "https://www.curseforge.com/sims4";
@@ -104,7 +105,7 @@ function matches(item, text, filter) {
 function filtersFrom(url) {
   const value = (key, max) => (url.searchParams.get(key) ?? "").trim().slice(0, max);
   const index = Number(value("page", 5) || 1);
-  if (!Number.isInteger(index) || index < 1 || index > Math.floor(10000 / PAGE)) {
+  if (!Number.isInteger(index) || index < 1 || index > Math.ceil(SEARCH_LIMIT / PAGE)) {
     throw new CatalogError("Choose a valid results page.", 400);
   }
   const group = value("category", 30);
@@ -122,7 +123,9 @@ async function catalogSearch(url, env) {
     const start = (filter.index - 1) * PAGE;
     return { mode: "sample", items: records.slice(start, start + PAGE), next: start + PAGE < records.length, total: records.length };
   }
-  const params = { gameId: GAME, pageSize: PAGE, index: (filter.index - 1) * PAGE,
+  const index = (filter.index - 1) * PAGE;
+  const pageSize = Math.min(PAGE, SEARCH_LIMIT - index);
+  const params = { gameId: GAME, pageSize, index,
     sortField: 2, sortOrder: "desc", searchFilter: filter.query || filter.creator };
   if (filter.group || filter.style) {
     const { data } = await curseforge(env, "/categories", { gameId: GAME });
@@ -139,7 +142,7 @@ async function catalogSearch(url, env) {
   return {
     mode: "live",
     items: (result.data ?? []).map(normalize).filter(item => item && matches(item, "", filter)),
-    next: params.index + PAGE < Math.min(10000, pagination.totalCount ?? 0),
+    next: index + pageSize < Math.min(SEARCH_LIMIT, pagination.totalCount ?? 0),
     total: filtered ? null : pagination.totalCount ?? 0,
   };
 }

@@ -53,3 +53,28 @@ test("live provider keeps API keys server-side and respects distribution", async
   assert.deepEqual(live.items.map(item => item.file), [{ id: 11 }, null, null]);
   assert.equal((await (await req("/api/mods/42", env)).json()).file.id, 11);
 });
+
+test("live catalog makes a partial last request within the provider limit", async t => {
+  const lastFiles = [9997, 9998, 9999, 10000].map(id => ({ id, gameId: 781, name: "Resource " + id }));
+  const search = t.mock.method(globalThis, "fetch", async url => {
+    assert.equal(url.pathname, "/v1/mods/search");
+    const index = Number(url.searchParams.get("index"));
+    const size = Number(url.searchParams.get("pageSize"));
+    assert.ok(index + size <= 10000);
+    return Response.json({ data: index === 9996 ? lastFiles : [], pagination: { totalCount: 12000 } });
+  });
+  const env = { CURSEFORGE_API_KEY: "private-key" };
+  const penultimate = await req("/api/catalog?page=1666", env);
+  assert.equal(penultimate.status, 200);
+  assert.equal((await penultimate.json()).next, true);
+  const last = await req("/api/catalog?page=1667", env);
+  assert.equal(last.status, 200);
+  const finalPage = await last.json();
+  assert.deepEqual(finalPage.items.map(item => Number(item.id)), [9997, 9998, 9999, 10000]);
+  assert.equal(finalPage.next, false);
+  const windows = search.mock.calls.map(({ arguments: [url] }) =>
+    [url.searchParams.get("index"), url.searchParams.get("pageSize")]);
+  assert.deepEqual(windows, [["9990", "6"], ["9996", "4"]]);
+  assert.equal((await req("/api/catalog?page=1668", env)).status, 400);
+  assert.equal(search.mock.callCount(), 2);
+});
