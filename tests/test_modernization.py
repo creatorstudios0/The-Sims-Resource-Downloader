@@ -18,6 +18,7 @@ from desktop_data import parse_url
 from qt_services import LibraryService, scan_files
 from qt_theme import ToggleSwitch
 from desktop_transfer import DesktopTSRDownload as TSRDownload
+from sims_install import install_plan
 
 URL = "https://www.thesimsresource.com/downloads/123"
 
@@ -204,7 +205,7 @@ def test_real_disk_scan_install_toggle_and_history(app_state, qtbot, tmp_path):
     service.state["game"] = str(game)
     service.add_local([source])
     key = next(iter(service.items))
-    plan = service.install_preview(key)
+    plan = install_plan(source, game)
     assert [entry[3] for entry in plan] == [False, False, True]
     service.install_selected(key, plan)
     qtbot.waitUntil(lambda: bool(service.batches))
@@ -232,6 +233,79 @@ def test_real_disk_scan_install_toggle_and_history(app_state, qtbot, tmp_path):
     assert sum(row["action"] == "Install" for row in service.history_rows()) == 1
     qtbot.waitUntil(lambda: not service.jobs)
 
+
+
+@pytest.mark.parametrize("changed", ["game", "mods"])
+def test_install_preview_discarded_after_folder_changes(app_state, qtbot, tmp_path, monkeypatch, changed):
+    service, window = app_state
+    first, second = tmp_path / "First", tmp_path / "Second"
+    first.mkdir()
+    second.mkdir()
+    source = tmp_path / "sample.package"
+    source.write_bytes(b"mod")
+    service.state["game"] = str(first)
+    service.add_local([source])
+    window.go(2)
+    window.library_list.selectRow(0)
+    planned, release = Event(), Event()
+    install_plan = qt_services.install_plan
+
+    def delayed_plan(*args):
+        plan = install_plan(*args)
+        planned.set()
+        assert release.wait(5)
+        return plan
+
+    monkeypatch.setattr(qt_services, "install_plan", delayed_plan)
+    dialog = Mock(return_value=QDialog.DialogCode.Rejected)
+    monkeypatch.setattr(QDialog, "exec", dialog)
+    window.preview_install()
+    try:
+        qtbot.waitUntil(planned.is_set)
+        if changed == "game":
+            service.update_settings(str(second), {})
+        else:
+            service.update_settings(str(first), {"mods": str(second)})
+    finally:
+        release.set()
+    qtbot.waitUntil(lambda: not any(job.startswith("preview:") for job in service.jobs))
+    dialog.assert_not_called()
+    assert "changed" in window.toast_content.text()
+
+
+@pytest.mark.parametrize("changed", ["source", "busy", "unchanged"])
+def test_install_preview_rechecked_at_confirmation(app_state, qtbot, tmp_path, monkeypatch, changed):
+    service, window = app_state
+    game = tmp_path / "The Sims 4"
+    game.mkdir()
+    source, replacement = tmp_path / "sample.package", tmp_path / "replacement.package"
+    source.write_bytes(b"original")
+    replacement.write_bytes(b"replaced")
+    service.state["game"] = str(game)
+    service.add_local([source])
+    key = next(iter(service.items))
+    window.go(2)
+    window.library_list.selectRow(0)
+
+    def confirm_preview(_dialog):
+        if changed == "source":
+            service.items[key]["path"] = str(replacement)
+        elif changed == "busy":
+            service.jobs.add("content-backup")
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(QDialog, "exec", confirm_preview)
+    try:
+        window.preview_install()
+        qtbot.waitUntil(lambda: not any(job.startswith(("preview:", "install:")) for job in service.jobs))
+        target = game / "Mods" / source.name
+        if changed == "unchanged":
+            assert target.read_bytes() == b"original"
+        else:
+            assert not target.exists()
+            assert ("changed" if changed == "source" else "file operation") in window.toast_content.text()
+    finally:
+        service.jobs.discard("content-backup")
 
 
 @pytest.mark.parametrize("legacy_batch", [False, True])

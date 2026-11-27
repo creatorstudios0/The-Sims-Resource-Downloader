@@ -93,7 +93,7 @@ def test_website_cannot_install_before_confirmation(library, tmp_path, qtbot, mo
 
     monkeypatch.setattr(window, "confirm", lambda *_: True)
     previews = []
-    monkeypatch.setattr(window, "show_preview", lambda key, plan: previews.append((key, plan)))
+    monkeypatch.setattr(window, "show_preview", lambda key, _inputs, plan: previews.append((key, plan)))
     window.receive_website_link(LINK)
     qtbot.waitUntil(lambda: bool(previews))
     assert downloads == [True]

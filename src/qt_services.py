@@ -700,11 +700,23 @@ class LibraryService(QObject):
                                  date=batch.get("date", ""), batch=batch_id))
         return sorted(rows, key=lambda row: row["date"], reverse=True)
 
-    def install_preview(self, key):
-        game = self.game()
-        if not game:
+    def install_preview_inputs(self, key):
+        item = self.items.get(key, {})
+        source = item.get("path") if item.get("status") == "Complete" else None
+        return source, self.game(), self.settings["mods"] or None
+
+    def request_install_preview(self, key):
+        inputs = self.install_preview_inputs(key)
+        source, game, _ = inputs
+        if not source:
+            raise ValueError("The installation source is no longer available in the library.")
+        if game is None:
             raise ValueError("Choose your Sims 4 user data folder in Settings.")
-        return install_plan(self.items[key]["path"], game, self.settings["mods"] or None)
+
+        def prepare():
+            return inputs, install_plan(*inputs)
+
+        self.job("preview:" + key, prepare)
 
     def install_selected(self, key, plan):
         if self.mutating_files():
