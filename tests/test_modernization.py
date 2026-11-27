@@ -683,3 +683,57 @@ def test_can_add_selection_to_another_group_while_filtering(app_state, qtbot, tm
 
     assert groups["Destination"] == [key]
     assert getattr(window, kind) == "Source"
+
+
+@pytest.mark.parametrize("kind, initially_disabled", [("profile", False), ("collection", True)])
+def test_saved_group_follows_external_quarantine_change(app_state, qtbot, tmp_path, kind, initially_disabled):
+    service, window = app_state
+    service.state["game"] = str(tmp_path)
+    mods = tmp_path / "Mods"
+    mods.mkdir()
+    enabled = mods / "A.package"
+    disabled = mods / "A.package.disabled"
+    original, renamed = (disabled, enabled) if initially_disabled else (enabled, disabled)
+    original.write_bytes(b"original")
+    renamed.write_bytes(b"separate copy")
+    service.scan()
+    qtbot.waitUntil(lambda: not service.jobs)
+    key = next(key for key, record in service.disk.items() if Path(record["path"]) == original)
+    groups = window.group_records(kind)
+    groups["Saved group"] = [key]
+    service.publish()
+    window.go(2)
+    getattr(window, f"{kind}_control").setCurrentText("Saved group")
+    assert [Path(window.library_entries[k]["path"]) for k, _ in window.library_model.rows] == [original]
+
+    renamed.unlink()
+    original.rename(renamed)
+    service.scan()
+    qtbot.waitUntil(lambda: not service.jobs)
+    assert [Path(window.library_entries[k]["path"]) for k, _ in window.library_model.rows] == [renamed]
+
+    window.library_list.selectRow(0)
+    window.edit_group(kind, "remove")
+    assert groups["Saved group"] == []
+    assert window.library_model.rowCount() == 0
+
+
+def test_remove_legacy_managed_row_from_saved_group(app_state, qtbot, tmp_path):
+    service, window = app_state
+    service.state["game"] = str(tmp_path)
+    mods = tmp_path / "Mods"
+    mods.mkdir()
+    mod = mods / "A.package"
+    mod.write_bytes(b"managed")
+    service.batches["batch"] = {"item": "resource", "files": [{"path": str(mod), "disabled": False}]}
+    service.collections["Old collection"] = ["managed:batch:0", "resource"]
+    service.scan()
+    qtbot.waitUntil(lambda: not service.jobs)
+    window.go(2)
+    window.collection_control.setCurrentText("Old collection")
+    assert window.library_model.rowCount() == 1
+
+    window.library_list.selectRow(0)
+    window.edit_group("collection", "remove")
+    assert service.collections["Old collection"] == []
+    assert window.library_model.rowCount() == 0

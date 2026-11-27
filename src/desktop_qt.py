@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 import curseforge
 from logger import logger
-from library_view import FILE_STATES, FILE_TYPES, extension, library_rows, member_key
+from library_view import FILE_STATES, FILE_TYPES, extension, library_rows, member_key, member_keys
 from qt_activity import ActivityConsole, ConsoleHandler, Notifications
 from qt_dashboard import Dashboard
 from qt_tokens import ACCENT, DENSITIES, THEMES, palette
@@ -990,7 +990,7 @@ class MainWindow(QMainWindow):
                   set(self.s.collections.get(self.collection, [])) if self.collection else None)
         result = library_rows(records, query=query, category=category, file_type=self.file_filter.currentText(),
                               state=self.state_filter.currentText(), sort=self.sort_order.currentText(),
-                              groups=groups, managed=managed_items)
+                              groups=groups, managed=managed_items, disk=self.s.disk)
         rows = []
         for key, record, filetype, status in result:
             tag = record.get("category", "Other") + (" (inferred)" if record.get("inferred") else "")
@@ -1120,7 +1120,11 @@ class MainWindow(QMainWindow):
         groups = self.group_records(kind)
         name = getattr(self, kind)
         if operation in {"add", "remove"}:
-            selected_members = self.selected_members()
+            if operation == "add":
+                selected_members = self.selected_members()
+            else:
+                selected_members = {member for key in self.library_keys()
+                                    for member in member_keys(key, self.library_entries[key], self.s.disk)}
             if not selected_members:
                 self.inform("Select mods first.", "warning")
                 return
