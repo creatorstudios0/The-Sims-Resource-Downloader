@@ -1,10 +1,14 @@
 """Read-only inventory regression tests with fake temporary game folders."""
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from tempfile import TemporaryDirectory
+from threading import Barrier, Lock
 import json
+import os
 import unittest
+from unittest.mock import patch
 
 from library_insights import scan_inventory, write_report, format_summary
 
@@ -48,6 +52,37 @@ class InventoryTests(unittest.TestCase):
         report = scan_inventory(self.mods / "missing")
         self.assertEqual(report["total_files"], 0)
         self.assertEqual(len(report["warnings"]), 1)
+
+    def test_export_preserves_existing_temporary_namesake(self):
+        destination = self.root / "inventory.json"
+        unrelated = destination.with_name(destination.name + ".tmp")
+        unrelated.write_text("keep this", encoding="utf-8")
+
+        write_report({"files": []}, destination)
+
+        self.assertEqual(unrelated.read_text(encoding="utf-8"), "keep this")
+        self.assertEqual(json.loads(destination.read_text(encoding="utf-8")), {"files": []})
+
+    def test_overlapping_exports_publish_complete_reports(self):
+        destination = self.root / "inventory.json"
+        reports = [{"files": [], "run": run} for run in (1, 2)]
+        ready = Barrier(2)
+        publishing = Lock()
+        replace = os.replace
+
+        def replace_together(source, target):
+            ready.wait(timeout=5)
+            with publishing:
+                replace(source, target)
+
+        with patch("library_insights.os.replace", side_effect=replace_together):
+            with ThreadPoolExecutor(max_workers=2) as workers:
+                futures = [workers.submit(write_report, report, destination) for report in reports]
+                for future in futures:
+                    self.assertEqual(future.result(), str(destination))
+
+        self.assertIn(json.loads(destination.read_text(encoding="utf-8")), reports)
+        self.assertEqual(set(self.root.iterdir()), {self.mods, self.tray, destination})
 
     def test_max_files_limit(self):
         for name in ("one.package", "two.package"):

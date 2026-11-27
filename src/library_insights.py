@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 import csv
 import json
 import os
@@ -124,24 +125,27 @@ def scan_inventory(mods, tray=None, max_files=MAX_FILES):
 def write_report(report, destination):
     """Export JSON or CSV; the caller chooses the output file explicitly."""
     destination = Path(destination)
-    if destination.suffix.lower() not in {".json", ".csv"}:
+    suffix = destination.suffix.lower()
+    if suffix not in {".json", ".csv"}:
         raise ValueError("Choose a .json or .csv report filename")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(destination.name + ".tmp")
+    temporary = None
     try:
-        if destination.suffix.lower() == ".json":
-            with temporary.open("w", encoding="utf-8") as output:
+        with NamedTemporaryFile(mode="w", encoding="utf-8", newline=None if suffix == ".json" else "",
+                                dir=destination.parent, prefix=".sims-audit-", suffix=".tmp", delete=False) as output:
+            temporary = Path(output.name)
+            if suffix == ".json":
                 json.dump(report, output, indent=2, ensure_ascii=False)
                 output.write("\n")
-        else:
-            with temporary.open("w", encoding="utf-8", newline="") as output:
+            else:
                 writer = csv.DictWriter(output, fieldnames=[
                     "section", "relative_path", "path", "bytes", "extension", "disabled"])
                 writer.writeheader()
                 writer.writerows(report["files"])
         os.replace(temporary, destination)
     finally:
-        temporary.unlink(missing_ok=True)
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     return str(destination)
 
 
