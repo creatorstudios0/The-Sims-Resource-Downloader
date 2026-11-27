@@ -683,3 +683,61 @@ def test_can_add_selection_to_another_group_while_filtering(app_state, qtbot, tm
 
     assert groups["Destination"] == [key]
     assert getattr(window, kind) == "Source"
+
+
+def test_failed_patch_check_disables_review_of_old_result(app_state, qtbot, tmp_path):
+    service, window = app_state
+    game = tmp_path / "game"
+    game.mkdir()
+    version = game / "GameVersion.txt"
+    version.write_text("1.115.200.1030", encoding="utf-8")
+    service.state["game"] = str(game)
+    service.state["reviewedGameVersions"] = {str(game): "1.114.46.1030"}
+    service.check_patch()
+    qtbot.waitUntil(window.patch_reviewed.isEnabled)
+
+    version.unlink()
+    version.mkdir()
+    window.patch_check.click()
+    qtbot.waitUntil(lambda: "patch-check" not in service.jobs)
+
+    assert service.patch_versions() == (None, "1.114.46.1030")
+    assert not window.patch_reviewed.isEnabled()
+    assert "Game version unavailable" in window.patch_summary.text()
+
+
+@pytest.mark.parametrize("old_check_fails", [False, True])
+def test_patch_check_retries_for_newly_selected_folder(app_state, qtbot, tmp_path, monkeypatch, old_check_fails):
+    service, window = app_state
+    old_game = tmp_path / "old game"
+    new_game = tmp_path / "new game"
+    old_game.mkdir()
+    new_game.mkdir()
+    checking_old = Event()
+    release_old = Event()
+    read_patch = qt_services.read_patch
+    (old_game / "GameVersion.txt").write_text("1.114.46.1030", encoding="utf-8")
+    (new_game / "GameVersion.txt").write_text("1.115.200.1030", encoding="utf-8")
+
+    def check(folder):
+        if folder == old_game:
+            checking_old.set()
+            if not release_old.wait(timeout=5):
+                raise RuntimeError("Test did not release the old check")
+            if old_check_fails:
+                raise OSError("The previous folder is offline")
+        return read_patch(folder)
+
+    monkeypatch.setattr(qt_services, "read_patch", check)
+    service.state["game"] = str(old_game)
+    service.check_patch()
+    try:
+        qtbot.waitUntil(checking_old.is_set)
+        service.update_settings(str(new_game), {})
+    finally:
+        release_old.set()
+    qtbot.waitUntil(lambda: "patch-check" not in service.jobs)
+
+    assert service.patch_versions() == ("1.115.200.1030", "1.115.200.1030")
+    assert str(old_game) not in service.state["reviewedGameVersions"]
+    assert "1.115.200.1030" in window.patch_summary.text()

@@ -256,6 +256,7 @@ class LibraryService(QObject):
         self.library_present = {}
         self.scanned_sources = {}
         self.patch_version = None
+        self.patch_check_folder = None
         self.health = {}
         self.paused = True
         self.closing = False
@@ -486,8 +487,16 @@ class LibraryService(QObject):
             if key == "cleanup":
                 self.pump()
                 self.save()
-            if key == "patch-check" and value is not None:
-                self.commit_patch(*value)
+            if key == "patch-check":
+                folder = self.patch_check_folder
+                self.patch_check_folder = None
+                if folder != self.game():
+                    error = None
+                    self.check_patch()
+                elif error:
+                    self.patch_version = None
+                else:
+                    self.commit_patch(*value)
             elif key == "content-backup" and value is not None:
                 self.state["lastContentBackup"] = value
                 self.save()
@@ -560,13 +569,12 @@ class LibraryService(QObject):
         return current, reviewed
 
     def check_patch(self):
-        if self.game():
-            self.job("patch-check", read_patch, self.game())
+        folder = self.game()
+        if folder and "patch-check" not in self.jobs and not self.closing:
+            self.patch_check_folder = folder
+            self.job("patch-check", read_patch, folder)
 
     def commit_patch(self, folder, version):
-        if folder != str(self.game()):
-            self.check_patch()
-            return
         self.patch_version = folder, version
         reviewed = self.state.setdefault("reviewedGameVersions", {})
         if version and folder not in reviewed:
