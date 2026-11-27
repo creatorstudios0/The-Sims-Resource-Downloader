@@ -964,7 +964,8 @@ class MainWindow(QMainWindow):
                     continue
                 managed_items.add(batch["item"])
                 item = self.s.items.get(batch["item"], {})
-                records[f"managed:{batch_key}:{index}"] = dict(
+                file_key = os.path.normcase(file["path"])
+                records[f"managed:{batch_key}:{file_key}"] = dict(
                     disk, name=Path(file["path"]).name, path=str(location), item=batch["item"],
                     creator=item.get("creator", ""), category=item.get("category") or disk.get("category", "Other"),
                     inferred=item.get("inferred", True), disabled=file["disabled"], origin="managed",
