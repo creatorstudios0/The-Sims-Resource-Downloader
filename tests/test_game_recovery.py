@@ -62,6 +62,23 @@ def test_backup_preserves_subfolders_and_quarantined_files(tmp_path):
 
 
 @pytest.mark.parametrize("folder_name", ["Mods", "Tray"])
+def test_backup_rejects_content_root_that_is_a_file(tmp_path, folder_name):
+    game = tmp_path / "game"
+    game.mkdir()
+    other = game / ("Tray" if folder_name == "Mods" else "Mods")
+    other.mkdir()
+    misplaced = game / folder_name
+    misplaced.write_bytes(b"keep this")
+    output = tmp_path / "content.zip"
+
+    with pytest.raises(ValueError, match=rf"{folder_name} path is not a folder"):
+        backup_content(game, game / "Mods", output)
+
+    assert not output.exists()
+    assert misplaced.read_bytes() == b"keep this"
+
+
+@pytest.mark.parametrize("folder_name", ["Mods", "Tray"])
 def test_backup_rejects_windows_junction_roots(tmp_path, folder_name):
     winapi = pytest.importorskip("_winapi")
     game = tmp_path / "game"
