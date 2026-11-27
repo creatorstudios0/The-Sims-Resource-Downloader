@@ -689,7 +689,8 @@ class LibraryService(QObject):
                                  paths=list(paths), error=error, date=when or timestamp()))
 
     def history_rows(self):
-        rows = list(self.history)
+        # Install history records can share a timestamp. Prefer the last recorded event.
+        rows = list(reversed(self.history))
         recorded = {event.get("batch") for event in rows if event["action"] == "Install"}
         for batch_id, batch in self.batches.items():
             if batch_id not in recorded:

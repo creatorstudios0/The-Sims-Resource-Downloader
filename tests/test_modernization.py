@@ -683,3 +683,50 @@ def test_can_add_selection_to_another_group_while_filtering(app_state, qtbot, tm
 
     assert groups["Destination"] == [key]
     assert getattr(window, kind) == "Source"
+
+
+@pytest.mark.parametrize("view", ["List", "Grid"])
+@pytest.mark.parametrize("chosen, expected", [("alpha.package", None), ("beta.package", "beta.package")])
+def test_library_selection_after_partial_uninstall(app_state, qtbot, tmp_path, view, chosen, expected):
+    service, window = app_state
+    service.state["game"] = str(tmp_path)
+    source = tmp_path / "two-mods.zip"
+    with zipfile.ZipFile(source, "w") as archive:
+        archive.writestr("alpha.package", b"first mod")
+        archive.writestr("beta.package", b"second mod")
+
+    service.add_local([source], install_now=True)
+    qtbot.waitUntil(lambda: not service.jobs)
+    batch = next(iter(service.batches))
+    window.go(2)
+    window.state_filter.setCurrentText("Installed")
+    position = next(index for index, (_, cells) in enumerate(window.library_model.rows) if cells[0] == chosen)
+    window.view_switch.setCurrentText(view)
+    if view == "Grid":
+        selection = window.library_grid.selectionModel()
+        selection.select(window.grid_model.index(position, 0), selection.SelectionFlag.Select)
+    else:
+        window.library_list.selectRow(position)
+    assert window.current_mod()["name"] == chosen
+
+    mods = tmp_path / "Mods"
+    (mods / "beta.package").write_bytes(b"updated elsewhere")
+    service.undo(batch)
+    qtbot.waitUntil(lambda: not service.jobs)
+    assert not (mods / "alpha.package").exists()
+    assert (mods / "beta.package").read_bytes() == b"updated elsewhere"
+    assert service.history[-1]["result"] == "Partial"
+    current = window.current_mod()
+    assert (current["name"] if current else None) == expected
+
+
+
+def test_install_activity_prefers_latest_event_when_timestamps_match(app_state):
+    service, window = app_state
+    stamp = "2026-05-01T12:00:00"
+    service.history_event("mod", "Install", "Completed", [], when=stamp)
+    service.history_event("mod", "Uninstall", "Partial", [], when=stamp)
+    service.publish()
+
+    assert [cells[3] for _, cells in window.history_model.rows] == ["Uninstall", "Install"]
+    assert window.dashboard.timeline.item(0).text().startswith("Uninstall")
