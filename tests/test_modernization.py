@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QDialog, QMessageBox, QTableView
 import qt_services
 import curseforge
 from desktop_qt import MainWindow
-from desktop_data import parse_url
+from desktop_data import parse_url, save_json
 from qt_services import LibraryService, scan_files
 from qt_theme import ToggleSwitch
 from desktop_transfer import DesktopTSRDownload as TSRDownload
@@ -369,6 +369,42 @@ def test_tsr_discover_downloads_and_installs(app_state, qtbot, tmp_path, monkeyp
     qtbot.waitUntil(lambda: bool(service.batches) and not service.jobs)
     assert (tmp_path / "Tray" / "room.trayitem").read_bytes() == b"room"
     assert window.pages.currentIndex() == 1
+
+
+def test_library_save_preserves_existing_sidecar(app_state):
+    service, _ = app_state
+    sidecar = service.path.with_suffix(".tmp")
+    sidecar.write_bytes(b"existing file")
+    service.profiles["Favorites"] = ["123"]
+    service.save()
+
+    assert sidecar.exists() and sidecar.read_bytes() == b"existing file"
+    assert json.loads(service.path.read_text(encoding="utf-8"))["profiles"] == {"Favorites": ["123"]}
+    snapshot = service.backups.snapshots()[0]
+    assert json.loads(snapshot.read_text(encoding="utf-8"))["profiles"] == {"Favorites": ["123"]}
+
+
+def test_state_save_cleans_up_after_serialization_failure(tmp_path):
+    state_path = tmp_path / "desktop-state.json"
+    previous_state = '{"profiles": {}}'
+    state_path.write_text(previous_state, encoding="utf-8")
+
+    with pytest.raises(TypeError):
+        save_json(state_path, {"profiles": set()})
+
+    assert state_path.read_text(encoding="utf-8") == previous_state
+    assert list(tmp_path.iterdir()) == [state_path]
+
+
+def test_state_save_cleans_up_after_replacement_failure(tmp_path):
+    state_path = tmp_path / "desktop-state.json"
+    state_path.mkdir()
+
+    with pytest.raises(OSError):
+        save_json(state_path, {"profiles": {}})
+
+    assert state_path.is_dir()
+    assert list(tmp_path.iterdir()) == [state_path]
 
 
 def test_profile_backup_recovers_corrupt_state(tmp_path, qtbot, monkeypatch):
