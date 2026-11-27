@@ -1249,11 +1249,21 @@ class MainWindow(QMainWindow):
     def preview_install(self):
         record = self.current_mod()
         if record and record["origin"] == "library":
-            key = record["item"]
-            self.s.job("preview:" + key, self.s.install_preview, key)
-            self.inform("Preparing installation preview…")
+            self.request_install_preview(record["item"])
 
-    def show_preview(self, key, plan):
+    def request_install_preview(self, key):
+        try:
+            self.s.request_install_preview(key)
+        except ValueError as error:
+            self.inform(str(error), "warning")
+            return
+        self.inform("Preparing installation preview…")
+
+    def show_preview(self, key, inputs, plan):
+        stale = "The source file or installation folders changed. Open a new install preview."
+        if self.s.install_preview_inputs(key) != inputs:
+            self.inform(stale, "warning")
+            return
         dialog = QDialog(self)
         dialog.setWindowTitle("Install preview")
         dialog.resize(680, 410)
@@ -1270,7 +1280,13 @@ class MainWindow(QMainWindow):
         confirm = button(f"Install {count} file(s)", dialog.accept, True)
         confirm.setEnabled(bool(count))
         layout.addLayout(row(None, button("Close", dialog.reject), confirm))
-        if dialog.exec() == QDialog.DialogCode.Accepted and not self.closing and not self.s.mutating_files():
+        if dialog.exec() != QDialog.DialogCode.Accepted or self.closing:
+            return
+        if self.s.install_preview_inputs(key) != inputs:
+            self.inform(stale, "warning")
+        elif self.s.mutating_files():
+            self.inform("Wait for the active file operation to finish, then open a new install preview.", "warning")
+        else:
             self.s.install_selected(key, plan)
 
     def toggle_library(self):
@@ -1591,7 +1607,7 @@ class MainWindow(QMainWindow):
     def website_download_ready(self, key):
         if key in self.website_previews and not self.closing:
             self.website_previews.remove(key)
-            self.s.job("preview:" + key, self.s.install_preview, key)
+            self.request_install_preview(key)
 
     def setting_toggle(self, key, name):
         control = ToggleSwitch(name)
@@ -1778,7 +1794,7 @@ class MainWindow(QMainWindow):
             self.inform(f"Removed {len(removed)} file(s)." + (f" {len(errors)} issue(s) recorded in history." if errors else ""),
                         "warning" if errors else "success")
         elif job.startswith("preview:") and not error and not self.closing:
-            self.show_preview(job.split(":", 1)[1], value)
+            self.show_preview(job.split(":", 1)[1], *value)
         elif job == "detect" and not error:
             if value:
                 self.setting_controls["game"].setText(str(value))
