@@ -1,4 +1,5 @@
 """Search and sort the existing library projection without mutating its records."""
+from os.path import normcase
 from pathlib import Path
 
 from sims_install import MOD_EXTENSIONS, TRAY_EXTENSIONS
@@ -18,12 +19,28 @@ def member_key(key, record):
     return record.get("item") or key
 
 
-def library_rows(records, *, query, category, file_type, state, sort, groups, managed):
+def member_keys(key, record, disk):
+    keys = {key, member_key(key, record)}
+    if record["origin"] == "scan":
+        path = Path(record["path"])
+        alternate = path.with_suffix("") if record["disabled"] else path.with_name(path.name + ".disabled")
+        alternate_key = normcase(str(alternate))
+        # A scan can see an external quarantine rename. Keep separate copies
+        # independent when both names are present.
+        if alternate_key not in disk:
+            keys.add(alternate_key)
+    return keys
+
+
+def library_rows(records, *, query, category, file_type, state, sort, groups, managed, disk):
     query = query.strip().casefold()
+    active_groups = [group for group in groups if group is not None]
     rows = []
     for key, record in records.items():
-        if any(group is not None and key not in group and member_key(key, record) not in group for group in groups):
-            continue
+        if active_groups:
+            keys = member_keys(key, record, disk)
+            if any(group.isdisjoint(keys) for group in active_groups):
+                continue
         if category not in ("All categories", record.get("category", "Other")):
             continue
         suffix = extension(record)
