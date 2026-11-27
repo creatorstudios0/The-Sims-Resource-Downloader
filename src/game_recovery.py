@@ -48,17 +48,19 @@ def backup_content(game, mods_folder, target):
     if os.path.lexists(target):
         raise FileExistsError("A backup already exists at that path. Choose a new filename.")
     configured = {"Mods": Path(mods_folder), "Tray": Path(game).resolve() / "Tray"}
-    for folder in configured.values():
+    roots = {}
+    for label, folder in configured.items():
         try:
             info = folder.lstat()
-        except (FileNotFoundError, NotADirectoryError):
+        except FileNotFoundError:
             continue
         if stat.S_ISLNK(info.st_mode) or folder_link(info):
             raise ValueError(f"The {folder.name} folder is a filesystem link. Select the real folder before backing up.")
-    roots = {name: folder.resolve() for name, folder in configured.items()}
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError(f"The {label} path is not a folder: {folder}")
+        roots[label] = folder.resolve()
     if any(target.is_relative_to(root) for root in roots.values()):
         raise ValueError("Save the backup outside your Mods and Tray folders.")
-    roots = {name: folder for name, folder in roots.items() if folder.is_dir()}
     if not roots:
         raise ValueError("The selected game folder has no Mods or Tray folder to back up.")
 
