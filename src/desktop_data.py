@@ -2,6 +2,7 @@
 from pathlib import Path
 from html import unescape
 from html.parser import HTMLParser
+from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse
 import json
 import os
@@ -44,12 +45,18 @@ def parse_url(value):
 
 
 def save_json(path, value):
-    temporary = path.with_suffix(".tmp")
-    with temporary.open("w", encoding="utf-8") as output:
-        json.dump(value, output, ensure_ascii=False, indent=2)
-        output.flush()
-        os.fsync(output.fileno())
-    temporary.replace(path)
+    temporary = None
+    try:
+        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                prefix=".sims-state-", suffix=".tmp", delete=False) as output:
+            temporary = Path(output.name)
+            json.dump(value, output, ensure_ascii=False, indent=2)
+            output.flush()
+            os.fsync(output.fileno())
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def inspect_item(url, dependencies=True):
