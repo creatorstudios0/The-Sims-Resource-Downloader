@@ -528,10 +528,13 @@ class LibraryService(QObject):
             self.active.pop(key, None)
             self.progress_data.pop(key, None)
             if value:
-                item.update(value)
+                details = dict(value, inferred=True)
+                if item.get("inferred") is False and item.get("category"):
+                    details.update(category=item["category"], inferred=False)
+                item.update(details)
                 if item["name"] == f"TSR item {key}":
                     item["name"] = Path(item["path"]).stem
-                item.update(added=item.get("added") or timestamp(), inferred=True)
+                item["added"] = item.get("added") or timestamp()
                 logger.info("Downloaded %s", item["name"])
                 self.notice.emit("success", f"Downloaded {item['name']}")
             else:

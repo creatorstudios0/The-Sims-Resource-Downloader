@@ -185,6 +185,48 @@ def test_cancel_and_close(app_state, qtbot, monkeypatch):
     assert service.state["windowGeometry"]
 
 
+@pytest.mark.parametrize("provider", ["TSR", "CurseForge"])
+@pytest.mark.parametrize("custom_category", [False, True])
+def test_replacing_download_keeps_manual_library_category(app_state, qtbot, tmp_path, monkeypatch,
+                                                          provider, custom_category):
+    service, window = app_state
+    service.state["game"] = str(tmp_path)
+    original = tmp_path / "original.package"
+    original.write_bytes(b"old")
+    replacement = tmp_path / "replacement.package"
+    replacement.write_bytes(b"new")
+    key = "123" if provider == "TSR" else "cf-42-27"
+    service.items[key] = dict(name="My mod", source=provider, url=URL, path=str(original),
+                              status="Complete", category="Other", inferred=True)
+    service.publish()
+    window.go(2)
+    window.library_list.selectRow(window.library_model.indices[key])
+    if custom_category:
+        monkeypatch.setattr("desktop_qt.QInputDialog.getItem", lambda *_: ("Favorites", True))
+        window.category_button.click()
+        assert service.items[key]["category"] == "Favorites"
+    original.unlink()
+
+    def transfer(*_):
+        return dict(path=str(replacement), category="Mod Files / Package Mods", status="Complete", detail="")
+
+    if provider == "TSR":
+        monkeypatch.setattr(qt_services, "fetch_item", transfer)
+        service.import_text(URL, lookup=False)
+        service.queue([key])
+    else:
+        monkeypatch.setattr(curseforge, "download", transfer)
+        service.queue_curseforge_file({"id": 42, "name": "My mod"}, {"id": 27})
+    qtbot.waitUntil(lambda: service.items[key]["path"] == str(replacement))
+
+    category = "Favorites" if custom_category else "Mod Files / Package Mods"
+    saved = json.loads(service.path.read_text(encoding="utf-8"))["items"][key]
+    assert saved["category"] == category
+    assert saved["inferred"] is not custom_category
+    window.category_filter.setCurrentText(category)
+    assert key in window.library_model.indices
+
+
 def test_real_disk_scan_install_toggle_and_history(app_state, qtbot, tmp_path):
     service, window = app_state
     game = tmp_path / "The Sims 4"
